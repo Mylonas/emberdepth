@@ -158,6 +158,10 @@ class GameViewModel @Inject constructor(
                         sfx.play("wipe", 0.8f)
                         engine.healParty(0.5)
                     }
+                    BattleEngine.EventType.HERO_HEAL -> {
+                        sfx.play("levelup", 0.2f)
+                        renderer.onHeroHealed(event.targetIndex, event.damage)
+                    }
                 }
             }
         }

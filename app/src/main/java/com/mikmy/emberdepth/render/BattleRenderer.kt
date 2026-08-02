@@ -273,6 +273,11 @@ class BattleRenderer {
             "FLOOR $floor", colEmber, 1.0f, unit * 0.05f)
     }
 
+    fun onHeroHealed(slot: Int, amount: BigNum) {
+        val (hx, hy) = heroScreenPos(slot)
+        floatingText.push(hx, hy - unit * 0.04f, "+${amount.format()}", colHealth, 0.5f, unit * 0.025f)
+    }
+
     fun onGoldEarned(amount: BigNum, x: Float, y: Float) {
         floatingText.push(x, y - unit * 0.05f, "+${amount.format()}", colGold, 0.5f, unit * 0.025f)
     }

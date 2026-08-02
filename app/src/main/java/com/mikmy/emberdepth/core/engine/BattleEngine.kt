@@ -5,6 +5,7 @@ import com.mikmy.emberdepth.core.model.Element
 import com.mikmy.emberdepth.core.model.Enemy
 import com.mikmy.emberdepth.core.model.HeroDef
 import com.mikmy.emberdepth.core.model.HeroState
+import com.mikmy.emberdepth.core.model.Role
 import com.mikmy.emberdepth.core.model.Stats
 import kotlin.random.Random
 
@@ -13,9 +14,10 @@ class BattleEngine {
     data class BattleHero(
         val def: HeroDef,
         val state: HeroState,
-        val stats: Stats,
+        var stats: Stats,
         var currentHp: BigNum,
         var attackTimer: Float = 0f,
+        var healTimer: Float = 0f,
         val slot: Int
     ) {
         val alive get() = currentHp > BigNum.ZERO
@@ -36,7 +38,7 @@ class BattleEngine {
 
     enum class EventType {
         HERO_ATTACK, ENEMY_ATTACK, ENEMY_KILLED, FLOOR_CLEARED,
-        HERO_DIED, PARTY_WIPED
+        HERO_DIED, PARTY_WIPED, HERO_HEAL
     }
 
     private val events = mutableListOf<BattleEvent>()
@@ -100,6 +102,16 @@ class BattleEngine {
             if (hero.attackTimer >= interval) {
                 hero.attackTimer -= interval
                 attackEnemy(hero, currentEnemy)
+            }
+        }
+
+        for (hero in heroes) {
+            if (!hero.alive || hero.def.role != Role.SUPPORT) continue
+            hero.healTimer += dt * hero.stats.spd.toFloat()
+            val healInterval = Tuning.ATTACK_INTERVAL_BASE.toFloat() * 1.5f
+            if (hero.healTimer >= healInterval) {
+                hero.healTimer -= healInterval
+                healLowestAlly(hero)
             }
         }
 
@@ -182,10 +194,15 @@ class BattleEngine {
     }
 
     private fun pickTarget(): BattleHero? {
-        val frontRow = heroes.filter { it.alive && it.slot < 2 }
-        if (frontRow.isNotEmpty()) return frontRow[rng.nextInt(frontRow.size)]
         val alive = heroes.filter { it.alive }
-        return if (alive.isNotEmpty()) alive[rng.nextInt(alive.size)] else null
+        if (alive.isEmpty()) return null
+        val tanks = alive.filter { it.def.role == Role.TANK }
+        if (tanks.isNotEmpty() && rng.nextFloat() < 0.7f) {
+            return tanks[rng.nextInt(tanks.size)]
+        }
+        val frontRow = alive.filter { it.slot < 2 }
+        if (frontRow.isNotEmpty()) return frontRow[rng.nextInt(frontRow.size)]
+        return alive[rng.nextInt(alive.size)]
     }
 
     private fun spawnFloor() {
@@ -205,6 +222,29 @@ class BattleEngine {
                 hero.currentHp = hero.stats.hp * 0.3
             }
         }
+    }
+
+    private fun healLowestAlly(support: BattleHero) {
+        val wounded = heroes.filter { it.alive && it.currentHp < it.stats.hp }
+        if (wounded.isEmpty()) return
+        val target = wounded.minByOrNull { it.currentHp.toDouble() / it.stats.hp.toDouble() }!!
+        val healAmount = support.stats.atk * 0.5
+        target.currentHp = (target.currentHp + healAmount).let {
+            if (it > target.stats.hp) target.stats.hp else it
+        }
+        events.add(BattleEvent(
+            type = EventType.HERO_HEAL,
+            sourceSlot = support.slot,
+            targetIndex = target.slot,
+            damage = healAmount
+        ))
+    }
+
+    fun refreshHeroStats(slot: Int, newStats: Stats) {
+        val hero = heroes.find { it.slot == slot } ?: return
+        val hpRatio = hero.currentHp.toDouble() / hero.stats.hp.toDouble()
+        hero.stats = newStats
+        hero.currentHp = newStats.hp * hpRatio.coerceIn(0.0, 1.0)
     }
 
     fun healParty(fraction: Double = 1.0) {
