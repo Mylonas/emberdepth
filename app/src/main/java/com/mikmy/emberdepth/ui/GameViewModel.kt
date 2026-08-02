@@ -7,6 +7,8 @@ import com.mikmy.emberdepth.core.content.HeroRegistry
 import com.mikmy.emberdepth.core.economy.GoldEconomy
 import com.mikmy.emberdepth.core.engine.BattleEngine
 import com.mikmy.emberdepth.core.engine.LootGenerator
+import com.mikmy.emberdepth.core.engine.OfflineResult
+import com.mikmy.emberdepth.core.engine.OfflineSimulator
 import com.mikmy.emberdepth.core.model.BigNum
 import com.mikmy.emberdepth.core.model.Gear
 import com.mikmy.emberdepth.core.model.HeroDef
@@ -44,6 +46,12 @@ class GameViewModel @Inject constructor(
     private val _materials = MutableStateFlow<Map<MaterialType, Int>>(emptyMap())
     val materials: StateFlow<Map<MaterialType, Int>> = _materials
 
+    private val _offlineResult = MutableStateFlow<OfflineResult?>(null)
+    val offlineResult: StateFlow<OfflineResult?> = _offlineResult
+
+    private val _selectedHeroId = MutableStateFlow<String?>(null)
+    val selectedHeroId: StateFlow<String?> = _selectedHeroId
+
     private var initialized = false
     private var allGear = emptyList<Gear>()
 
@@ -60,6 +68,7 @@ class GameViewModel @Inject constructor(
             _materials.value = progressRepo.getMaterials()
             allGear = gearRepo.getAll()
 
+            processOfflineEarnings()
             startBattle()
         }
 
@@ -104,11 +113,19 @@ class GameViewModel @Inject constructor(
                 when (event.type) {
                     BattleEngine.EventType.HERO_ATTACK -> {
                         sfx.play("hit", 0.5f)
+                        val (tx, ty) = renderer.enemyScreenPos(event.targetIndex)
+                        renderer.onHeroAttack(event.sourceSlot, event.damage, tx, ty)
                     }
                     BattleEngine.EventType.ENEMY_ATTACK -> {
                         sfx.play("thud", 0.4f)
                     }
                     BattleEngine.EventType.ENEMY_KILLED -> {
+                        val (ex, ey) = renderer.enemyScreenPos(event.targetIndex)
+                        val enemyColor = (event.element?.color ?: 0xFFAAAAAA).toInt()
+                        renderer.onEnemyKilled(ex, ey, enemyColor, event.isBoss)
+                        renderer.onGoldEarned(event.goldEarned, ex, ey)
+                        sfx.play("gold", 0.4f)
+
                         val newGold = _player.value.gold + event.goldEarned
                         _player.value = _player.value.copy(gold = newGold)
                         playerRepo.updateGold(newGold)
@@ -170,6 +187,59 @@ class GameViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    fun selectHero(id: String?) {
+        _selectedHeroId.value = id
+    }
+
+    fun dismissOfflineResult() {
+        _offlineResult.value = null
+    }
+
+    fun toggleMute() {
+        sfx.muted = !sfx.muted
+    }
+
+    private suspend fun processOfflineEarnings() {
+        val player = _player.value
+        if (player.lastOnlineMs <= 0L) return
+        val elapsed = System.currentTimeMillis() - player.lastOnlineMs
+        if (elapsed < 60_000L) return
+
+        val power = partyPower()
+        val result = OfflineSimulator.simulate(
+            startFloor = player.currentFloor,
+            partyPower = power,
+            elapsedMs = elapsed
+        )
+        if (result.floorsCleared <= 0 && result.goldEarned.isZero()) return
+
+        val newGold = player.gold + result.goldEarned
+        val newFloor = result.newFloor
+        _player.value = player.copy(
+            gold = newGold,
+            currentFloor = newFloor,
+            highestFloor = maxOf(player.highestFloor, newFloor)
+        )
+        playerRepo.updateGold(newGold)
+        playerRepo.updateFloor(newFloor)
+        for ((type, amount) in result.materialsEarned) {
+            progressRepo.addMaterial(type, amount)
+        }
+        _offlineResult.value = result
+    }
+
+    private fun partyPower(): BigNum {
+        val heroStates = _heroes.value.filter { it.unlocked && it.formationSlot != null }
+        var power = BigNum.ZERO
+        for (state in heroStates) {
+            val def = HeroRegistry.byId(state.id) ?: continue
+            val gear = gearForHero(state)
+            val stats = state.effectiveStats(def, gear)
+            power = power + stats.atk * stats.hp
+        }
+        return power
     }
 
     fun saveOnPause() {

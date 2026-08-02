@@ -30,7 +30,8 @@ class BattleEngine {
         val goldEarned: BigNum = BigNum.ZERO,
         val floor: Int = 0,
         val isBoss: Boolean = false,
-        val materials: List<LootGenerator.MaterialReward> = emptyList()
+        val materials: List<LootGenerator.MaterialReward> = emptyList(),
+        val element: Element? = null
     )
 
     enum class EventType {
@@ -141,7 +142,8 @@ class BattleEngine {
             goldEarned = gold,
             materials = materials,
             isBoss = enemy.isBoss,
-            floor = currentFloor
+            floor = currentFloor,
+            element = enemy.element
         ))
 
         enemyIndex++

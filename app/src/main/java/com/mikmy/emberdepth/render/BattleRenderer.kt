@@ -238,6 +238,22 @@ class BattleRenderer {
         }
     }
 
+    fun heroScreenPos(slot: Int): Pair<Float, Float> {
+        val baseX = w * 0.18f
+        val baseY = battleY + (h - battleY) * 0.5f
+        val x = baseX + (slot % 2) * w * 0.12f
+        val y = baseY + (slot / 2 - 0.5f) * (h - battleY) * 0.28f
+        return x to y
+    }
+
+    fun enemyScreenPos(index: Int): Pair<Float, Float> {
+        val baseX = w * 0.75f
+        val baseY = battleY + (h - battleY) * 0.45f
+        val x = baseX + (index % 2) * w * 0.10f
+        val y = baseY + (index / 2 - 0.5f) * (h - battleY) * 0.22f
+        return x to y
+    }
+
     fun onHeroAttack(slot: Int, damage: BigNum, targetX: Float, targetY: Float) {
         val col = colTextPrimary
         floatingText.push(targetX, targetY - unit * 0.03f, damage.format(), col, 0.6f, unit * 0.03f)
