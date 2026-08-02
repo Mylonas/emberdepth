@@ -5,24 +5,27 @@ import android.os.Bundle
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowManager
-import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Text
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.mikmy.emberdepth.core.content.HeroRegistry
 import com.mikmy.emberdepth.render.BattleView
 import com.mikmy.emberdepth.ui.GameViewModel
+import com.mikmy.emberdepth.ui.components.HeroTray
+import com.mikmy.emberdepth.ui.components.LevelUpPanel
+import com.mikmy.emberdepth.ui.components.MaterialBar
+import com.mikmy.emberdepth.ui.components.OfflinePopup
+import com.mikmy.emberdepth.ui.components.SettingsButton
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -42,6 +45,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             val player by viewModel.player.collectAsState()
             val heroes by viewModel.heroes.collectAsState()
+            val materials by viewModel.materials.collectAsState()
+            val selectedHeroId by viewModel.selectedHeroId.collectAsState()
+            val offlineResult by viewModel.offlineResult.collectAsState()
 
             Box(modifier = Modifier.fillMaxSize()) {
                 AndroidView(
@@ -58,20 +64,65 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize()
                 )
 
-                // hero level-up bar at the bottom (minimal M1 UI)
+                MaterialBar(
+                    materials = materials,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 56.dp)
+                )
+
+                SettingsButton(
+                    isMuted = viewModel.sfx.muted,
+                    highestFloor = player.highestFloor,
+                    onToggleMute = {
+                        viewModel.toggleMute()
+                        viewModel.sfx.play("ui_tap")
+                    },
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 8.dp, top = 56.dp)
+                )
+
                 val activeHeroes = heroes.filter { it.unlocked && it.formationSlot != null }
                 if (activeHeroes.isNotEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(16.dp)
-                    ) {
-                        Text(
-                            text = "Tap hero portraits to level up (coming in M2)",
-                            color = Color(0xFF8A8278),
-                            fontSize = 12.sp
+                    HeroTray(
+                        heroes = activeHeroes,
+                        heroDefs = HeroRegistry.ALL,
+                        onHeroTap = { heroId ->
+                            viewModel.selectHero(heroId)
+                            viewModel.sfx.play("ui_tap")
+                        },
+                        modifier = Modifier.align(Alignment.BottomCenter)
+                    )
+                }
+
+                val heroId = selectedHeroId
+                if (heroId != null) {
+                    val def = HeroRegistry.byId(heroId)
+                    val state = heroes.find { it.id == heroId }
+                    if (def != null && state != null) {
+                        LevelUpPanel(
+                            def = def,
+                            state = state,
+                            gold = player.gold,
+                            onLevelUp = {
+                                viewModel.levelUpHero(heroId)
+                                viewModel.sfx.play("ui_tap")
+                            },
+                            onDismiss = { viewModel.selectHero(null) }
                         )
                     }
+                }
+
+                val offline = offlineResult
+                if (offline != null) {
+                    OfflinePopup(
+                        result = offline,
+                        onCollect = {
+                            viewModel.dismissOfflineResult()
+                            viewModel.sfx.play("gold", 0.6f)
+                        }
+                    )
                 }
             }
         }

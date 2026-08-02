@@ -1,0 +1,94 @@
+package com.mikmy.emberdepth.ui.components
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.mikmy.emberdepth.ui.theme.EmberColors
+import com.mikmy.emberdepth.ui.theme.EmberPanel
+
+@Composable
+fun SettingsButton(
+    isMuted: Boolean,
+    highestFloor: Int,
+    onToggleMute: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Column(modifier = modifier) {
+        Surface(
+            modifier = Modifier
+                .size(36.dp)
+                .clickable { expanded = !expanded },
+            shape = CircleShape,
+            color = EmberColors.surface.copy(alpha = 0.8f)
+        ) {
+            androidx.compose.foundation.layout.Box(
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (expanded) "✕" else "⚙",
+                    color = EmberColors.textSecondary,
+                    fontSize = 16.sp
+                )
+            }
+        }
+
+        if (expanded) {
+            Spacer(Modifier.height(4.dp))
+            EmberPanel {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Sound",
+                            color = EmberColors.textPrimary,
+                            fontSize = 13.sp
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Switch(
+                            checked = !isMuted,
+                            onCheckedChange = { onToggleMute() },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = EmberColors.ember,
+                                checkedTrackColor = EmberColors.ember.copy(alpha = 0.3f),
+                                uncheckedThumbColor = EmberColors.textSecondary,
+                                uncheckedTrackColor = EmberColors.surface
+                            )
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "Highest Floor: $highestFloor",
+                        color = EmberColors.textSecondary,
+                        fontSize = 11.sp
+                    )
+                    Text(
+                        text = "EmberDepth v0.2.0",
+                        color = EmberColors.textSecondary.copy(alpha = 0.5f),
+                        fontSize = 10.sp
+                    )
+                }
+            }
+        }
+    }
+}
