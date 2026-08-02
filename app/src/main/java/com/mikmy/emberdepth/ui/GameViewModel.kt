@@ -161,7 +161,11 @@ class GameViewModel @Inject constructor(
                     }
                     BattleEngine.EventType.PARTY_WIPED -> {
                         sfx.play("wipe", 0.8f)
+                        engine.dropFloor()
                         engine.healParty(0.5)
+                        val newFloor = engine.currentFloor
+                        _player.value = _player.value.copy(currentFloor = newFloor)
+                        playerRepo.updateFloor(newFloor)
                     }
                     BattleEngine.EventType.HERO_HEAL -> {
                         sfx.play("levelup", 0.2f)
@@ -183,6 +187,14 @@ class GameViewModel @Inject constructor(
             playerRepo.updateGold(newGold)
             heroRepo.levelUp(heroId, state.level + 1)
             sfx.play("levelup", 0.6f)
+
+            val slot = state.formationSlot
+            if (slot != null) {
+                val def = HeroRegistry.byId(heroId) ?: return@launch
+                val newState = state.copy(level = state.level + 1)
+                val gear = gearForHero(newState)
+                engine.refreshHeroStats(slot, newState.effectiveStats(def, gear))
+            }
         }
     }
 
@@ -192,10 +204,21 @@ class GameViewModel @Inject constructor(
                 val state = heroRepo.getById(def.id) ?: continue
                 if (!state.unlocked) {
                     heroRepo.unlockHero(def.id)
+                    assignFormationSlot(def.id)
                     sfx.play("levelup", 0.8f)
                 }
             }
         }
+    }
+
+    private suspend fun assignFormationSlot(heroId: String) {
+        val occupied = _heroes.value
+            .filter { it.unlocked && it.formationSlot != null }
+            .mapNotNull { it.formationSlot }
+            .toSet()
+        val nextSlot = (0 until Tuning.MAX_FORMATION_SIZE).firstOrNull { it !in occupied }
+            ?: return
+        heroRepo.setSlot(heroId, nextSlot)
     }
 
     fun selectHero(id: String?) {

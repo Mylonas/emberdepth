@@ -29,6 +29,7 @@ object Tuning {
     const val OFFLINE_BASE_EFFICIENCY = 0.5
     const val OFFLINE_MAX_HOURS = 24.0
 
+    const val MAX_FORMATION_SIZE = 4
     const val ENEMIES_PER_FLOOR = 3
     const val ATTACK_INTERVAL_BASE = 1.0
 

@@ -252,4 +252,8 @@ class BattleEngine {
             hero.currentHp = hero.stats.hp * fraction
         }
     }
+
+    fun dropFloor() {
+        if (currentFloor > 1) currentFloor--
+    }
 }
