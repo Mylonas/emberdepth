@@ -20,6 +20,8 @@ class Sfx {
     private val bank = HashMap<String, ShortArray>()
     private val voices = ArrayList<Voice>(24)
     private val lock = Any()
+    private var ambientData: ShortArray? = null
+    private var ambientPos = 0
 
     @Volatile private var running = false
     @Volatile var muted = false
@@ -84,6 +86,14 @@ class Sfx {
         val out = ShortArray(CHUNK)
         while (running) {
             java.util.Arrays.fill(mix, 0f)
+            val amb = ambientData
+            if (amb != null && !muted) {
+                for (k in 0 until CHUNK) {
+                    mix[k] += amb[ambientPos]
+                    ambientPos++
+                    if (ambientPos >= amb.size) ambientPos = 0
+                }
+            }
             synchronized(lock) {
                 var i = 0
                 while (i < voices.size) {
@@ -190,6 +200,27 @@ class Sfx {
             tone(0.70f, 250f, 40f, 0.30f, W_SAW, 3f),
             tone(0.70f, 130f, 30f, 0.20f, W_SINE, 3f)
         )
+
+        // ui tap
+        bank["ui_tap"] = tone(0.03f, 1800f, 1400f, 0.08f, W_SINE, 45f)
+
+        buildAmbientLoop()
+    }
+
+    private fun buildAmbientLoop() {
+        val dur = 4.0f
+        val n = (dur * SR).toInt()
+        val out = ShortArray(n)
+        for (i in 0 until n) {
+            val t = i.toFloat() / SR
+            val lfo = (0.5f + 0.5f * sin(2.0 * PI * 0.5 * t)).toFloat()
+            val s1 = sin(2.0 * PI * 80.0 * t).toFloat() * 0.04f * lfo
+            val s2 = sin(2.0 * PI * 200.0 * t).toFloat() * 0.02f * lfo
+            val s3 = sin(2.0 * PI * 120.0 * t).toFloat() * 0.02f * (1f - lfo)
+            val env = if (i < SR / 4) i.toFloat() / (SR / 4) else if (i > n - SR / 4) (n - i).toFloat() / (SR / 4) else 1f
+            out[i] = ((s1 + s2 + s3) * env * 32767f).toInt().coerceIn(-32767, 32767).toShort()
+        }
+        ambientData = out
     }
 
     private fun tone(dur: Float, f0: Float, f1: Float, vol: Float, wave: Int, decay: Float): ShortArray {
