@@ -3,6 +3,7 @@ package com.mikmy.emberdepth.core.engine
 import com.mikmy.emberdepth.core.model.BigNum
 import com.mikmy.emberdepth.core.model.Element
 import com.mikmy.emberdepth.core.model.Enemy
+import com.mikmy.emberdepth.core.model.EnemyType
 import com.mikmy.emberdepth.core.model.LootDrop
 import com.mikmy.emberdepth.core.model.MaterialType
 import kotlin.math.pow
@@ -23,6 +24,12 @@ object EnemyFactory {
         val atk = BigNum.of(if (isBoss) atkBase * Tuning.BOSS_ATK_MULT else atkBase)
         val def = BigNum.of(if (isBoss) defBase * Tuning.BOSS_DEF_MULT else defBase)
 
+        val type = if (isBoss) {
+            if (rng.nextBoolean()) EnemyType.WYRM else EnemyType.SKULL
+        } else {
+            EnemyType.entries[rng.nextInt(EnemyType.entries.size)]
+        }
+
         return Enemy(
             floor = floor,
             element = element,
@@ -31,7 +38,8 @@ object EnemyFactory {
             atk = atk,
             def = def,
             isBoss = isBoss,
-            lootTable = buildLootTable(floor, isBoss, rng)
+            lootTable = buildLootTable(floor, isBoss, rng),
+            type = type
         )
     }
 

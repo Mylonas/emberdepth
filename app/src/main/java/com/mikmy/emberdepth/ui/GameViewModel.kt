@@ -7,6 +7,7 @@ import com.mikmy.emberdepth.core.content.HeroRegistry
 import com.mikmy.emberdepth.core.economy.GoldEconomy
 import com.mikmy.emberdepth.core.engine.BattleEngine
 import com.mikmy.emberdepth.core.engine.LootGenerator
+import com.mikmy.emberdepth.core.engine.Tuning
 import com.mikmy.emberdepth.core.engine.OfflineResult
 import com.mikmy.emberdepth.core.engine.OfflineSimulator
 import com.mikmy.emberdepth.core.model.BigNum
@@ -148,6 +149,10 @@ class GameViewModel @Inject constructor(
                         sfx.play("floor", 0.6f)
                         renderer.onFloorCleared(event.floor)
                         progressRepo.incrementStat("floors_cleared")
+
+                        if (newFloor % Tuning.BOSS_INTERVAL == 0) {
+                            renderer.onBossFloor()
+                        }
 
                         checkHeroUnlocks(newFloor)
                     }
