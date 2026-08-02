@@ -21,9 +21,11 @@ android {
         applicationId = "com.mikmy.emberdepth"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "1.0.0"
         resourceConfigurations += setOf("en")
+
+        manifestPlaceholders["ADMOB_APP_ID"] = "ca-app-pub-3940256099942544~3347511713"
     }
 
     signingConfigs {
@@ -50,9 +52,11 @@ android {
             } else {
                 signingConfigs.getByName("debug")
             }
+            buildConfigField("String", "AD_REWARDED_ID", "\"ca-app-pub-XXXX/YYYY\"")
         }
         debug {
             isMinifyEnabled = false
+            buildConfigField("String", "AD_REWARDED_ID", "\"ca-app-pub-3940256099942544/5224354917\"")
         }
     }
 
@@ -109,6 +113,12 @@ dependencies {
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+
+    // Ads
+    implementation("com.google.android.gms:play-services-ads:23.3.0")
+
+    // Billing
+    implementation("com.android.billingclient:billing-ktx:7.0.0")
 
     // Test
     testImplementation("junit:junit:4.13.2")

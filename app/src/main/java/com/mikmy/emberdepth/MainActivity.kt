@@ -29,10 +29,13 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.mikmy.emberdepth.core.content.HeroRegistry
 import com.mikmy.emberdepth.core.model.TutorialFlag
+import com.mikmy.emberdepth.monetize.AdManager
+import com.mikmy.emberdepth.monetize.BillingManager
 import com.mikmy.emberdepth.render.BattleView
 import com.mikmy.emberdepth.ui.GameViewModel
 import com.mikmy.emberdepth.core.engine.Tuning
 import com.mikmy.emberdepth.ui.components.AchievementPanel
+import com.mikmy.emberdepth.ui.components.BossRewardPopup
 import com.mikmy.emberdepth.ui.components.DailyRewardPopup
 import com.mikmy.emberdepth.ui.components.EmberUpgradePanel
 import com.mikmy.emberdepth.ui.components.ForgePanel
@@ -59,8 +62,13 @@ class MainActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         goFullscreen()
 
+        BillingManager.init(this)
+        AdManager.loadAd(this)
+
         viewModel.sfx.start()
         viewModel.initIfNeeded()
+
+        val activity = this
 
         setContent {
             val player by viewModel.player.collectAsState()
@@ -79,7 +87,11 @@ class MainActivity : ComponentActivity() {
             val showStats by viewModel.showStats.collectAsState()
             val lifetimeStats by viewModel.lifetimeStats.collectAsState()
             val dailyReward by viewModel.dailyReward.collectAsState()
+            val bossRewardFloor by viewModel.bossRewardFloor.collectAsState()
             val lastForged by viewModel.lastForgedGear.collectAsState()
+            val adReady by AdManager.adReady.collectAsState()
+            val isAdFree by BillingManager.isAdFree.collectAsState()
+            val removeAdsPrice by BillingManager.removeAdsPrice.collectAsState()
 
             Box(modifier = Modifier.fillMaxSize()) {
                 AndroidView(
@@ -121,6 +133,11 @@ class MainActivity : ComponentActivity() {
                     onResetProgress = {
                         viewModel.resetAllProgress()
                     },
+                    onRemoveAds = {
+                        BillingManager.launchPurchase(activity)
+                    },
+                    isAdFree = isAdFree,
+                    removeAdsPrice = removeAdsPrice,
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(start = 8.dp, top = 56.dp)
@@ -280,11 +297,34 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
+                val bossFloor = bossRewardFloor
+                if (bossFloor != null) {
+                    BossRewardPopup(
+                        floor = bossFloor,
+                        adFree = isAdFree,
+                        adReady = adReady,
+                        onWatchAd = {
+                            AdManager.showAd(activity,
+                                onReward = { viewModel.collectBossReward() },
+                                onDismiss = { viewModel.dismissBossReward() }
+                            )
+                        },
+                        onSkip = { viewModel.dismissBossReward() }
+                    )
+                }
+
                 val daily = dailyReward
                 if (daily != null) {
                     DailyRewardPopup(
                         reward = daily,
-                        onCollect = { viewModel.collectDailyReward() }
+                        adFree = isAdFree,
+                        adReady = adReady,
+                        onCollect = { viewModel.collectDailyReward() },
+                        onCollectBonus = {
+                            AdManager.showAd(activity,
+                                onReward = { viewModel.collectDailyBonus() }
+                            )
+                        }
                     )
                 }
 
@@ -292,9 +332,16 @@ class MainActivity : ComponentActivity() {
                 if (offline != null) {
                     OfflinePopup(
                         result = offline,
+                        adFree = isAdFree,
+                        adReady = adReady,
                         onCollect = {
                             viewModel.dismissOfflineResult()
                             viewModel.sfx.play("gold", 0.6f)
+                        },
+                        onCollectDouble = {
+                            AdManager.showAd(activity,
+                                onReward = { viewModel.collectOfflineDouble() }
+                            )
                         }
                     )
                 }

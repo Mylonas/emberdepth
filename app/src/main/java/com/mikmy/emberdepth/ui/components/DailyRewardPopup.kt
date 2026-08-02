@@ -28,7 +28,10 @@ import com.mikmy.emberdepth.ui.theme.EmberPanel
 @Composable
 fun DailyRewardPopup(
     reward: DailyReward,
+    adFree: Boolean = false,
+    adReady: Boolean = false,
     onCollect: () -> Unit,
+    onCollectBonus: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -79,6 +82,15 @@ fun DailyRewardPopup(
                 }
 
                 Spacer(Modifier.height(16.dp))
+                if (onCollectBonus != null) {
+                    EmberButton(
+                        text = if (adFree) "Collect + Bonus" else "Watch Ad for Bonus",
+                        onClick = onCollectBonus,
+                        enabled = adFree || adReady,
+                        color = EmberColors.ember
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
                 EmberButton(text = "Collect", onClick = onCollect, color = EmberColors.gold)
             }
         }

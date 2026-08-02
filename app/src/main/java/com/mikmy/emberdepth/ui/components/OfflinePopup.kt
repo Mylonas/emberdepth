@@ -29,7 +29,10 @@ import com.mikmy.emberdepth.ui.theme.EmberPanel
 @Composable
 fun OfflinePopup(
     result: OfflineResult,
+    adFree: Boolean = false,
+    adReady: Boolean = false,
     onCollect: () -> Unit,
+    onCollectDouble: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -77,6 +80,15 @@ fun OfflinePopup(
                 }
 
                 Spacer(Modifier.height(16.dp))
+                if (onCollectDouble != null) {
+                    EmberButton(
+                        text = if (adFree) "Collect 2x" else "Watch Ad for 2x",
+                        onClick = onCollectDouble,
+                        enabled = adFree || adReady,
+                        color = EmberColors.gold
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
                 EmberButton(text = "Collect", onClick = onCollect)
             }
         }
@@ -113,4 +125,3 @@ private fun formatDuration(ms: Long): String {
         else -> "Away briefly"
     }
 }
-

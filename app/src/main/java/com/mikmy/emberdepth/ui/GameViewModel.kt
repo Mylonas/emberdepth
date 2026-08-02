@@ -103,6 +103,9 @@ class GameViewModel @Inject constructor(
     private val _dailyReward = MutableStateFlow<DailyReward?>(null)
     val dailyReward: StateFlow<DailyReward?> = _dailyReward
 
+    private val _bossRewardFloor = MutableStateFlow<Int?>(null)
+    val bossRewardFloor: StateFlow<Int?> = _bossRewardFloor
+
     private var initialized = false
     private var allGear = emptyList<Gear>()
 
@@ -232,6 +235,10 @@ class GameViewModel @Inject constructor(
 
                         if (event.isBoss && !_player.value.hasTutorialFlag(TutorialFlag.FIRST_BOSS)) {
                             setTutorialFlag(TutorialFlag.FIRST_BOSS)
+                        }
+
+                        if (event.isBoss && event.floor % 100 == 0) {
+                            _bossRewardFloor.value = event.floor
                         }
 
                         checkHeroUnlocks(newFloor)
@@ -406,6 +413,71 @@ class GameViewModel @Inject constructor(
 
     fun dismissOfflineResult() {
         _offlineResult.value = null
+    }
+
+    fun collectOfflineDouble() {
+        viewModelScope.launch {
+            val result = _offlineResult.value ?: return@launch
+            _offlineResult.value = null
+
+            val bonusGold = result.goldEarned
+            val newGold = _player.value.gold + bonusGold
+            _player.value = _player.value.copy(gold = newGold)
+            playerRepo.updateGold(newGold)
+
+            for ((type, amount) in result.materialsEarned) {
+                progressRepo.addMaterial(type, amount)
+            }
+            sfx.play("gold", 0.8f)
+        }
+    }
+
+    fun collectDailyBonus() {
+        viewModelScope.launch {
+            val reward = _dailyReward.value ?: return@launch
+            _dailyReward.value = null
+
+            if (!reward.gold.isZero()) {
+                val totalGold = _player.value.gold + reward.gold * 1.5
+                _player.value = _player.value.copy(gold = totalGold)
+                playerRepo.updateGold(totalGold)
+            }
+            for ((type, amount) in reward.materials) {
+                progressRepo.addMaterial(type, amount + 1)
+            }
+            if (!reward.ember.isZero() && _player.value.rebirthCount > 0) {
+                val newEmber = _player.value.ember + reward.ember
+                _player.value = _player.value.copy(ember = newEmber)
+                playerRepo.updateEmber(newEmber)
+            }
+
+            progressRepo.incrementStat("daily_logins")
+            val updated = _player.value.copy(dailyLastMs = System.currentTimeMillis())
+            _player.value = updated
+            playerRepo.save(updated)
+            sfx.play("gold", 0.8f)
+        }
+    }
+
+    fun collectBossReward() {
+        viewModelScope.launch {
+            val floor = _bossRewardFloor.value ?: return@launch
+            _bossRewardFloor.value = null
+
+            val bonusGold = GoldEconomy.forgeCost(floor) * 2.0
+            val newGold = _player.value.gold + bonusGold
+            _player.value = _player.value.copy(gold = newGold)
+            playerRepo.updateGold(newGold)
+
+            progressRepo.addMaterial(MaterialType.ORE, 3)
+            progressRepo.addMaterial(MaterialType.ESSENCE, 1)
+            sfx.play("gold", 0.8f)
+            renderer.onForgeComplete("Boss Bonus!")
+        }
+    }
+
+    fun dismissBossReward() {
+        _bossRewardFloor.value = null
     }
 
     fun toggleMute() {

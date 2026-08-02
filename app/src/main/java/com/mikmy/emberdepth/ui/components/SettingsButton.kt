@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mikmy.emberdepth.BuildConfig
 import com.mikmy.emberdepth.ui.theme.EmberColors
 import com.mikmy.emberdepth.ui.theme.EmberPanel
 
@@ -34,6 +35,9 @@ fun SettingsButton(
     onRebirth: (() -> Unit)? = null,
     onStats: (() -> Unit)? = null,
     onResetProgress: (() -> Unit)? = null,
+    onRemoveAds: (() -> Unit)? = null,
+    isAdFree: Boolean = false,
+    removeAdsPrice: String? = null,
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -109,6 +113,26 @@ fun SettingsButton(
                                 .padding(vertical = 4.dp)
                         )
                     }
+                    if (onRemoveAds != null && !isAdFree) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = "Remove Ads${removeAdsPrice?.let { " — $it" } ?: ""}",
+                            color = EmberColors.gold,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .clickable { onRemoveAds() }
+                                .padding(vertical = 4.dp)
+                        )
+                    }
+                    if (isAdFree) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = "✓ Ad-Free",
+                            color = EmberColors.health,
+                            fontSize = 11.sp
+                        )
+                    }
                     if (onResetProgress != null) {
                         Spacer(Modifier.height(8.dp))
                         if (!confirmReset) {
@@ -137,7 +161,7 @@ fun SettingsButton(
                         }
                     }
                     Text(
-                        text = "EmberDepth v0.4.0",
+                        text = "EmberDepth v${BuildConfig.VERSION_NAME}",
                         color = EmberColors.textSecondary.copy(alpha = 0.5f),
                         fontSize = 10.sp
                     )
