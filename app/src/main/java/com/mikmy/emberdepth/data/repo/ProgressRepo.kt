@@ -90,4 +90,14 @@ class ProgressRepo @Inject constructor(
 
     suspend fun getStat(key: String): Long =
         statsDao.getAll().find { it.key == key }?.value ?: 0
+
+    suspend fun getAllStats(): Map<String, Long> =
+        statsDao.getAll().associate { it.key to it.value }
+
+    suspend fun deleteAllProgress() {
+        materialDao.resetAll()
+        emberUpgradeDao.deleteAll()
+        achievementDao.deleteAll()
+        statsDao.deleteAll()
+    }
 }

@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -29,9 +28,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.mikmy.emberdepth.core.content.HeroRegistry
+import com.mikmy.emberdepth.core.model.TutorialFlag
 import com.mikmy.emberdepth.render.BattleView
 import com.mikmy.emberdepth.ui.GameViewModel
 import com.mikmy.emberdepth.core.engine.Tuning
+import com.mikmy.emberdepth.ui.components.AchievementPanel
+import com.mikmy.emberdepth.ui.components.DailyRewardPopup
 import com.mikmy.emberdepth.ui.components.EmberUpgradePanel
 import com.mikmy.emberdepth.ui.components.ForgePanel
 import com.mikmy.emberdepth.ui.components.GearInventoryPanel
@@ -41,6 +43,8 @@ import com.mikmy.emberdepth.ui.components.MaterialBar
 import com.mikmy.emberdepth.ui.components.OfflinePopup
 import com.mikmy.emberdepth.ui.components.RebirthPanel
 import com.mikmy.emberdepth.ui.components.SettingsButton
+import com.mikmy.emberdepth.ui.components.StatsPanel
+import com.mikmy.emberdepth.ui.components.TutorialTooltip
 import com.mikmy.emberdepth.ui.theme.EmberColors
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -66,10 +70,15 @@ class MainActivity : ComponentActivity() {
             val offlineResult by viewModel.offlineResult.collectAsState()
             val gearList by viewModel.gear.collectAsState()
             val emberUpgrades by viewModel.emberUpgrades.collectAsState()
+            val achievements by viewModel.achievements.collectAsState()
             val showForge by viewModel.showForge.collectAsState()
             val showInventory by viewModel.showInventory.collectAsState()
             val showRebirthConfirm by viewModel.showRebirthConfirm.collectAsState()
             val showEmberUpgrades by viewModel.showEmberUpgrades.collectAsState()
+            val showAchievements by viewModel.showAchievements.collectAsState()
+            val showStats by viewModel.showStats.collectAsState()
+            val lifetimeStats by viewModel.lifetimeStats.collectAsState()
+            val dailyReward by viewModel.dailyReward.collectAsState()
             val lastForged by viewModel.lastForgedGear.collectAsState()
 
             Box(modifier = Modifier.fillMaxSize()) {
@@ -105,6 +114,13 @@ class MainActivity : ComponentActivity() {
                         viewModel.toggleRebirthConfirm()
                         viewModel.sfx.play("ui_tap")
                     },
+                    onStats = {
+                        viewModel.toggleStats()
+                        viewModel.sfx.play("ui_tap")
+                    },
+                    onResetProgress = {
+                        viewModel.resetAllProgress()
+                    },
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(start = 8.dp, top = 56.dp)
@@ -125,6 +141,10 @@ class MainActivity : ComponentActivity() {
                             viewModel.sfx.play("ui_tap")
                         }
                     } else null,
+                    onAchievements = {
+                        viewModel.toggleAchievements()
+                        viewModel.sfx.play("ui_tap")
+                    },
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(end = 8.dp, top = 56.dp)
@@ -140,6 +160,35 @@ class MainActivity : ComponentActivity() {
                             viewModel.sfx.play("ui_tap")
                         },
                         modifier = Modifier.align(Alignment.BottomCenter)
+                    )
+                }
+
+                // Tutorial tooltips
+                if (!player.hasTutorialFlag(TutorialFlag.LEVELED_HERO) && activeHeroes.isNotEmpty()) {
+                    TutorialTooltip(
+                        text = "Tap a hero to level up!",
+                        onDismiss = {},
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 80.dp)
+                    )
+                }
+                if (!player.hasTutorialFlag(TutorialFlag.OPENED_FORGE) && player.currentFloor >= 10) {
+                    TutorialTooltip(
+                        text = "Open the Forge to craft gear!",
+                        onDismiss = {},
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(end = 48.dp, top = 60.dp)
+                    )
+                }
+                if (!player.hasTutorialFlag(TutorialFlag.FIRST_REBIRTH) && player.highestFloor >= 45) {
+                    TutorialTooltip(
+                        text = "Rebirth at floor 50 for Ember!",
+                        onDismiss = {},
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(start = 48.dp, top = 60.dp)
                     )
                 }
 
@@ -216,6 +265,29 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
+                if (showAchievements) {
+                    AchievementPanel(
+                        achievements = achievements,
+                        onDismiss = { viewModel.dismissAchievements() }
+                    )
+                }
+
+                if (showStats) {
+                    StatsPanel(
+                        stats = lifetimeStats,
+                        totalPlayTimeMs = player.totalPlayTimeMs,
+                        onDismiss = { viewModel.dismissStats() }
+                    )
+                }
+
+                val daily = dailyReward
+                if (daily != null) {
+                    DailyRewardPopup(
+                        reward = daily,
+                        onCollect = { viewModel.collectDailyReward() }
+                    )
+                }
+
                 val offline = offlineResult
                 if (offline != null) {
                     OfflinePopup(
@@ -278,6 +350,7 @@ private fun ActionButtons(
     onForge: () -> Unit,
     onInventory: () -> Unit,
     onEmberUpgrades: (() -> Unit)? = null,
+    onAchievements: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier) {
@@ -315,6 +388,20 @@ private fun ActionButtons(
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(text = "🔥", color = EmberColors.ember, fontSize = 16.sp)
+                }
+            }
+        }
+        if (onAchievements != null) {
+            Spacer(Modifier.height(6.dp))
+            Surface(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clickable { onAchievements() },
+                shape = CircleShape,
+                color = EmberColors.surface.copy(alpha = 0.8f)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(text = "🏆", color = EmberColors.gold, fontSize = 16.sp)
                 }
             }
         }

@@ -29,6 +29,9 @@ interface PlayerDao {
 
     @Query("UPDATE player SET lastOnline = :time WHERE id = 1")
     suspend fun updateLastOnline(time: Long)
+
+    @Query("DELETE FROM player")
+    suspend fun deleteAll()
 }
 
 @Dao
@@ -68,6 +71,9 @@ interface HeroDao {
 
     @Query("UPDATE hero SET weaponId = NULL, armorId = NULL, accessoryId = NULL WHERE unlocked = 1")
     suspend fun resetGearAssignments()
+
+    @Query("DELETE FROM hero")
+    suspend fun deleteAll()
 }
 
 @Dao
@@ -125,6 +131,9 @@ interface EmberUpgradeDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: EmberUpgradeEntity)
+
+    @Query("DELETE FROM ember_upgrade")
+    suspend fun deleteAll()
 }
 
 @Dao
@@ -137,6 +146,9 @@ interface AchievementDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: AchievementEntity)
+
+    @Query("DELETE FROM achievement")
+    suspend fun deleteAll()
 }
 
 @Dao
@@ -149,4 +161,7 @@ interface StatsDao {
 
     @Query("UPDATE stats SET value = value + :amount WHERE key = :key")
     suspend fun increment(key: String, amount: Long)
+
+    @Query("DELETE FROM stats")
+    suspend fun deleteAll()
 }

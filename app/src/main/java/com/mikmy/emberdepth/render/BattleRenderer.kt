@@ -417,6 +417,11 @@ class BattleRenderer {
             "New $rarityLabel Gear!", colEmber, 1.2f, unit * 0.04f)
     }
 
+    fun onAchievementUnlock(name: String, tier: Int) {
+        floatingText.push(w * 0.5f, battleY + (h - battleY) * 0.4f,
+            "🏆 $name T$tier", colGold, 1.3f, unit * 0.04f)
+    }
+
     fun onRebirth() {
         screenFx.triggerFlash(0.8f)
         screenFx.triggerShake(0.015f, unit)

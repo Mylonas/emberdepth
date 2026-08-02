@@ -25,7 +25,7 @@ object AchievementDefs {
             bonusPerTier = 0.03
         ),
         AchievementDef(
-            id = "bosses_slain",
+            id = "bosses_killed",
             name = "Bane",
             description = "Defeat boss enemies",
             maxTier = 5,

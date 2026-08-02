@@ -32,9 +32,12 @@ fun SettingsButton(
     highestFloor: Int,
     onToggleMute: () -> Unit,
     onRebirth: (() -> Unit)? = null,
+    onStats: (() -> Unit)? = null,
+    onResetProgress: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
+    var confirmReset by remember { mutableStateOf(false) }
 
     Column(modifier = modifier) {
         Surface(
@@ -95,8 +98,46 @@ fun SettingsButton(
                                 .padding(vertical = 4.dp)
                         )
                     }
+                    if (onStats != null) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = "📊 Stats",
+                            color = EmberColors.textPrimary,
+                            fontSize = 13.sp,
+                            modifier = Modifier
+                                .clickable { onStats() }
+                                .padding(vertical = 4.dp)
+                        )
+                    }
+                    if (onResetProgress != null) {
+                        Spacer(Modifier.height(8.dp))
+                        if (!confirmReset) {
+                            Text(
+                                text = "Reset Progress",
+                                color = EmberColors.textSecondary.copy(alpha = 0.6f),
+                                fontSize = 11.sp,
+                                modifier = Modifier
+                                    .clickable { confirmReset = true }
+                                    .padding(vertical = 4.dp)
+                            )
+                        } else {
+                            Text(
+                                text = "⚠ Tap again to ERASE ALL DATA",
+                                color = EmberColors.damage,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .clickable {
+                                        confirmReset = false
+                                        expanded = false
+                                        onResetProgress()
+                                    }
+                                    .padding(vertical = 4.dp)
+                            )
+                        }
+                    }
                     Text(
-                        text = "EmberDepth v0.3.0",
+                        text = "EmberDepth v0.4.0",
                         color = EmberColors.textSecondary.copy(alpha = 0.5f),
                         fontSize = 10.sp
                     )

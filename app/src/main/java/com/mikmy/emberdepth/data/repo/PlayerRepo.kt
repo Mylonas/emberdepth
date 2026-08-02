@@ -27,6 +27,8 @@ class PlayerRepo @Inject constructor(private val dao: PlayerDao) {
 
     suspend fun updateLastOnline(time: Long) = dao.updateLastOnline(time)
 
+    suspend fun deleteAll() = dao.deleteAll()
+
     suspend fun ensureExists() {
         if (dao.get() == null) dao.upsert(PlayerEntity())
     }

@@ -3,16 +3,21 @@ package com.mikmy.emberdepth.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mikmy.emberdepth.audio.Sfx
+import com.mikmy.emberdepth.core.content.AchievementDefs
+import com.mikmy.emberdepth.core.content.DailyReward
+import com.mikmy.emberdepth.core.content.DailyRewards
 import com.mikmy.emberdepth.core.content.EmberUpgradeDefs
 import com.mikmy.emberdepth.core.content.HeroRegistry
 import com.mikmy.emberdepth.core.economy.EmberEconomy
 import com.mikmy.emberdepth.core.economy.GoldEconomy
+import com.mikmy.emberdepth.core.engine.AchievementChecker
 import com.mikmy.emberdepth.core.engine.BattleEngine
 import com.mikmy.emberdepth.core.engine.LootGenerator
 import com.mikmy.emberdepth.core.engine.Tuning
 import com.mikmy.emberdepth.core.engine.OfflineResult
 import com.mikmy.emberdepth.core.engine.OfflineSimulator
 import com.mikmy.emberdepth.core.economy.ForgeRecipes
+import com.mikmy.emberdepth.core.model.AchievementState
 import com.mikmy.emberdepth.core.model.BigNum
 import com.mikmy.emberdepth.core.model.Gear
 import com.mikmy.emberdepth.core.model.GearSlot
@@ -21,6 +26,7 @@ import com.mikmy.emberdepth.core.model.HeroState
 import com.mikmy.emberdepth.core.model.MaterialType
 import com.mikmy.emberdepth.core.model.PlayerState
 import com.mikmy.emberdepth.core.model.Rarity
+import com.mikmy.emberdepth.core.model.StatType
 import com.mikmy.emberdepth.core.model.TutorialFlag
 import com.mikmy.emberdepth.data.repo.GearRepo
 import com.mikmy.emberdepth.data.repo.HeroRepo
@@ -31,6 +37,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import java.util.Calendar
+import java.util.TimeZone
 import javax.inject.Inject
 
 @HiltViewModel
@@ -56,6 +64,9 @@ class GameViewModel @Inject constructor(
     private val _emberUpgrades = MutableStateFlow<Map<String, Int>>(emptyMap())
     val emberUpgrades: StateFlow<Map<String, Int>> = _emberUpgrades
 
+    private val _achievements = MutableStateFlow<List<AchievementState>>(emptyList())
+    val achievements: StateFlow<List<AchievementState>> = _achievements
+
     private val _offlineResult = MutableStateFlow<OfflineResult?>(null)
     val offlineResult: StateFlow<OfflineResult?> = _offlineResult
 
@@ -80,6 +91,18 @@ class GameViewModel @Inject constructor(
     private val _showEmberUpgrades = MutableStateFlow(false)
     val showEmberUpgrades: StateFlow<Boolean> = _showEmberUpgrades
 
+    private val _showAchievements = MutableStateFlow(false)
+    val showAchievements: StateFlow<Boolean> = _showAchievements
+
+    private val _showStats = MutableStateFlow(false)
+    val showStats: StateFlow<Boolean> = _showStats
+
+    private val _lifetimeStats = MutableStateFlow<Map<String, Long>>(emptyMap())
+    val lifetimeStats: StateFlow<Map<String, Long>> = _lifetimeStats
+
+    private val _dailyReward = MutableStateFlow<DailyReward?>(null)
+    val dailyReward: StateFlow<DailyReward?> = _dailyReward
+
     private var initialized = false
     private var allGear = emptyList<Gear>()
 
@@ -95,8 +118,10 @@ class GameViewModel @Inject constructor(
             _heroes.value = heroRepo.getAll()
             _materials.value = progressRepo.getMaterials()
             _emberUpgrades.value = progressRepo.getEmberUpgrades()
+            _achievements.value = progressRepo.getAchievements()
             allGear = gearRepo.getAll()
 
+            checkDailyReward()
             processOfflineEarnings()
             startBattle()
         }
@@ -119,6 +144,9 @@ class GameViewModel @Inject constructor(
         viewModelScope.launch {
             progressRepo.observeEmberUpgrades().collect { _emberUpgrades.value = it }
         }
+        viewModelScope.launch {
+            progressRepo.observeAchievements().collect { _achievements.value = it }
+        }
     }
 
     private fun startBattle() {
@@ -132,14 +160,18 @@ class GameViewModel @Inject constructor(
 
         val upgrades = _emberUpgrades.value
         val defs = EmberUpgradeDefs.ALL
+        val achBonuses = AchievementChecker.totalBonus(AchievementDefs.ALL, _achievements.value)
+
+        val baseDmgMult = EmberEconomy.totalDamageMultiplier(upgrades, defs)
+        val baseHpMult = EmberEconomy.totalHpMultiplier(upgrades, defs)
 
         engine.init(
             heroDefs = heroPairs,
             gearLookup = { state -> gearForHero(state) },
             startFloor = _player.value.currentFloor,
             goldMult = EmberEconomy.totalGoldMultiplier(upgrades, defs),
-            damageMult = EmberEconomy.totalDamageMultiplier(upgrades, defs),
-            hpMult = EmberEconomy.totalHpMultiplier(upgrades, defs)
+            damageMult = baseDmgMult * (1.0 + (achBonuses[StatType.ATK] ?: 0.0)),
+            hpMult = baseHpMult * (1.0 + (achBonuses[StatType.HP] ?: 0.0))
         )
     }
 
@@ -181,6 +213,7 @@ class GameViewModel @Inject constructor(
                         sfx.play(if (event.isBoss) "boss_kill" else "kill", 0.7f)
                         progressRepo.incrementStat("enemies_killed")
                         if (event.isBoss) progressRepo.incrementStat("bosses_killed")
+                        checkAchievements()
                     }
                     BattleEngine.EventType.FLOOR_CLEARED -> {
                         val newFloor = engine.currentFloor
@@ -197,7 +230,12 @@ class GameViewModel @Inject constructor(
                             renderer.onBossFloor()
                         }
 
+                        if (event.isBoss && !_player.value.hasTutorialFlag(TutorialFlag.FIRST_BOSS)) {
+                            setTutorialFlag(TutorialFlag.FIRST_BOSS)
+                        }
+
                         checkHeroUnlocks(newFloor)
+                        checkAchievements()
                     }
                     BattleEngine.EventType.HERO_DIED -> {
                         sfx.play("hero_died", 0.7f)
@@ -231,6 +269,10 @@ class GameViewModel @Inject constructor(
             heroRepo.levelUp(heroId, state.level + 1)
             sfx.play("levelup", 0.6f)
 
+            if (!_player.value.hasTutorialFlag(TutorialFlag.LEVELED_HERO)) {
+                setTutorialFlag(TutorialFlag.LEVELED_HERO)
+            }
+
             val slot = state.formationSlot
             if (slot != null) {
                 val def = HeroRegistry.byId(heroId) ?: return@launch
@@ -248,7 +290,9 @@ class GameViewModel @Inject constructor(
                 if (!state.unlocked) {
                     heroRepo.unlockHero(def.id)
                     assignFormationSlot(def.id)
+                    progressRepo.incrementStat("heroes_unlocked")
                     sfx.play("levelup", 0.8f)
+                    checkAchievements()
                 }
             }
         }
@@ -268,6 +312,92 @@ class GameViewModel @Inject constructor(
         return Tuning.MAX_FORMATION_SIZE + EmberEconomy.extraHeroSlots(
             _emberUpgrades.value, EmberUpgradeDefs.ALL
         )
+    }
+
+    private suspend fun checkAchievements() {
+        val stats = progressRepo.getAllStats()
+        val result = AchievementChecker.evaluate(
+            AchievementDefs.ALL, _achievements.value, stats
+        )
+        for ((def, newTier) in result.advanced) {
+            progressRepo.saveAchievement(
+                result.updated.first { it.id == def.id }
+            )
+            sfx.play("levelup", 0.8f)
+            renderer.onAchievementUnlock(def.name, newTier)
+        }
+        if (result.advanced.isNotEmpty()) {
+            for (state in result.updated) {
+                if (result.advanced.none { it.first.id == state.id }) continue.let {}
+                progressRepo.saveAchievement(state)
+            }
+        }
+        // Always save progress updates even without tier advances
+        for (state in result.updated) {
+            val existing = _achievements.value.find { it.id == state.id }
+            if (existing == null || existing.progress != state.progress) {
+                progressRepo.saveAchievement(state)
+            }
+        }
+        _achievements.value = result.updated
+
+        checkTutorialComplete()
+    }
+
+    private suspend fun checkTutorialComplete() {
+        val flags = _player.value.tutorialFlags
+        val allSet = (flags and TutorialFlag.LEVELED_HERO) != 0 &&
+            (flags and TutorialFlag.OPENED_FORGE) != 0 &&
+            (flags and TutorialFlag.FIRST_BOSS) != 0 &&
+            (flags and TutorialFlag.FIRST_REBIRTH) != 0
+        if (allSet && !_player.value.hasTutorialFlag(TutorialFlag.TUTORIAL_COMPLETE)) {
+            setTutorialFlag(TutorialFlag.TUTORIAL_COMPLETE)
+        }
+    }
+
+    private suspend fun checkDailyReward() {
+        val player = _player.value
+        val now = System.currentTimeMillis()
+        if (isNewDay(player.dailyLastMs, now)) {
+            val dayCount = (progressRepo.getStat("daily_logins") + 1).toInt()
+            val reward = DailyRewards.forDay(dayCount)
+            _dailyReward.value = reward
+        }
+    }
+
+    fun collectDailyReward() {
+        viewModelScope.launch {
+            val reward = _dailyReward.value ?: return@launch
+            _dailyReward.value = null
+
+            if (!reward.gold.isZero()) {
+                val newGold = _player.value.gold + reward.gold
+                _player.value = _player.value.copy(gold = newGold)
+                playerRepo.updateGold(newGold)
+            }
+            for ((type, amount) in reward.materials) {
+                progressRepo.addMaterial(type, amount)
+            }
+            if (!reward.ember.isZero() && _player.value.rebirthCount > 0) {
+                val newEmber = _player.value.ember + reward.ember
+                _player.value = _player.value.copy(ember = newEmber)
+                playerRepo.updateEmber(newEmber)
+            }
+
+            progressRepo.incrementStat("daily_logins")
+            val updated = _player.value.copy(dailyLastMs = System.currentTimeMillis())
+            _player.value = updated
+            playerRepo.save(updated)
+            sfx.play("gold", 0.6f)
+        }
+    }
+
+    private fun isNewDay(lastMs: Long, nowMs: Long): Boolean {
+        if (lastMs <= 0L) return true
+        val cal1 = Calendar.getInstance(TimeZone.getDefault()).apply { timeInMillis = lastMs }
+        val cal2 = Calendar.getInstance(TimeZone.getDefault()).apply { timeInMillis = nowMs }
+        return cal1.get(Calendar.DAY_OF_YEAR) != cal2.get(Calendar.DAY_OF_YEAR) ||
+            cal1.get(Calendar.YEAR) != cal2.get(Calendar.YEAR)
     }
 
     fun selectHero(id: String?) {
@@ -320,6 +450,27 @@ class GameViewModel @Inject constructor(
         _showEmberUpgrades.value = false
     }
 
+    fun toggleAchievements() {
+        _showAchievements.value = !_showAchievements.value
+    }
+
+    fun dismissAchievements() {
+        _showAchievements.value = false
+    }
+
+    fun toggleStats() {
+        _showStats.value = !_showStats.value
+        if (_showStats.value) {
+            viewModelScope.launch {
+                _lifetimeStats.value = progressRepo.getAllStats()
+            }
+        }
+    }
+
+    fun dismissStats() {
+        _showStats.value = false
+    }
+
     fun performRebirth() {
         viewModelScope.launch {
             val player = _player.value
@@ -358,6 +509,7 @@ class GameViewModel @Inject constructor(
 
             _heroes.value = heroRepo.getAll()
             allGear = emptyList()
+            checkAchievements()
             startBattle()
         }
     }
@@ -377,6 +529,29 @@ class GameViewModel @Inject constructor(
             playerRepo.updateEmber(newEmber)
             progressRepo.setUpgradeLevel(upgradeId, currentLevel + 1)
             sfx.play("ui_tap")
+        }
+    }
+
+    fun resetAllProgress() {
+        viewModelScope.launch {
+            playerRepo.deleteAll()
+            heroRepo.deleteAll()
+            gearRepo.deleteAll()
+            progressRepo.deleteAllProgress()
+
+            playerRepo.ensureExists()
+            heroRepo.ensureExists()
+            progressRepo.ensureMaterialsExist()
+
+            _player.value = playerRepo.get()
+            _heroes.value = heroRepo.getAll()
+            _materials.value = progressRepo.getMaterials()
+            _emberUpgrades.value = emptyMap()
+            _achievements.value = emptyList()
+            allGear = emptyList()
+
+            sfx.play("ui_tap")
+            startBattle()
         }
     }
 
@@ -404,6 +579,7 @@ class GameViewModel @Inject constructor(
             sfx.play("forge", 0.7f)
             progressRepo.incrementStat("gear_forged")
             renderer.onForgeComplete(gear.rarity.label)
+            checkAchievements()
         }
     }
 
