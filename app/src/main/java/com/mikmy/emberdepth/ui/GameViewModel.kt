@@ -10,12 +10,16 @@ import com.mikmy.emberdepth.core.engine.LootGenerator
 import com.mikmy.emberdepth.core.engine.Tuning
 import com.mikmy.emberdepth.core.engine.OfflineResult
 import com.mikmy.emberdepth.core.engine.OfflineSimulator
+import com.mikmy.emberdepth.core.economy.ForgeRecipes
 import com.mikmy.emberdepth.core.model.BigNum
 import com.mikmy.emberdepth.core.model.Gear
+import com.mikmy.emberdepth.core.model.GearSlot
 import com.mikmy.emberdepth.core.model.HeroDef
 import com.mikmy.emberdepth.core.model.HeroState
 import com.mikmy.emberdepth.core.model.MaterialType
 import com.mikmy.emberdepth.core.model.PlayerState
+import com.mikmy.emberdepth.core.model.Rarity
+import com.mikmy.emberdepth.core.model.TutorialFlag
 import com.mikmy.emberdepth.data.repo.GearRepo
 import com.mikmy.emberdepth.data.repo.HeroRepo
 import com.mikmy.emberdepth.data.repo.PlayerRepo
@@ -53,6 +57,18 @@ class GameViewModel @Inject constructor(
     private val _selectedHeroId = MutableStateFlow<String?>(null)
     val selectedHeroId: StateFlow<String?> = _selectedHeroId
 
+    private val _gear = MutableStateFlow<List<Gear>>(emptyList())
+    val gear: StateFlow<List<Gear>> = _gear
+
+    private val _lastForgedGear = MutableStateFlow<Gear?>(null)
+    val lastForgedGear: StateFlow<Gear?> = _lastForgedGear
+
+    private val _showForge = MutableStateFlow(false)
+    val showForge: StateFlow<Boolean> = _showForge
+
+    private val _showInventory = MutableStateFlow(false)
+    val showInventory: StateFlow<Boolean> = _showInventory
+
     private var initialized = false
     private var allGear = emptyList<Gear>()
 
@@ -81,6 +97,12 @@ class GameViewModel @Inject constructor(
         }
         viewModelScope.launch {
             progressRepo.observeMaterials().collect { _materials.value = it }
+        }
+        viewModelScope.launch {
+            gearRepo.observeAll().collect {
+                _gear.value = it
+                allGear = it
+            }
         }
     }
 
@@ -231,6 +253,138 @@ class GameViewModel @Inject constructor(
 
     fun toggleMute() {
         sfx.muted = !sfx.muted
+    }
+
+    fun toggleForge() {
+        _showForge.value = !_showForge.value
+        if (_showForge.value) {
+            _showInventory.value = false
+            viewModelScope.launch { setTutorialFlag(TutorialFlag.OPENED_FORGE) }
+        }
+    }
+
+    fun toggleInventory() {
+        _showInventory.value = !_showInventory.value
+        if (_showInventory.value) _showForge.value = false
+    }
+
+    fun dismissForge() {
+        _showForge.value = false
+        _lastForgedGear.value = null
+    }
+
+    fun dismissInventory() {
+        _showInventory.value = false
+    }
+
+    fun forgeGear() {
+        viewModelScope.launch {
+            val recipe = ForgeRecipes.basicForge()
+            if (!ForgeRecipes.canForge(recipe, _materials.value)) return@launch
+            val cost = GoldEconomy.forgeCost(_player.value.currentFloor)
+            if (_player.value.gold < cost) return@launch
+            if (gearRepo.count() >= Tuning.MAX_GEAR_INVENTORY) return@launch
+
+            val newGold = _player.value.gold - cost
+            _player.value = _player.value.copy(gold = newGold)
+            playerRepo.updateGold(newGold)
+
+            for ((type, amount) in recipe.materials) {
+                progressRepo.subtractMaterial(type, amount)
+            }
+
+            val gear = LootGenerator.forgeGear(_player.value.currentFloor)
+            val id = gearRepo.insert(gear)
+            val savedGear = gear.copy(id = id)
+
+            _lastForgedGear.value = savedGear
+            sfx.play("forge", 0.7f)
+            progressRepo.incrementStat("gear_forged")
+            renderer.onForgeComplete(gear.rarity.label)
+        }
+    }
+
+    private suspend fun setTutorialFlag(flag: Int) {
+        if (_player.value.hasTutorialFlag(flag)) return
+        val updated = _player.value.withTutorialFlag(flag)
+        _player.value = updated
+        playerRepo.save(updated)
+    }
+
+    fun equipGear(heroId: String, gearId: Long) {
+        viewModelScope.launch {
+            val gear = allGear.find { it.id == gearId } ?: return@launch
+            val heroState = heroRepo.getById(heroId) ?: return@launch
+
+            val currentGearId = when (gear.slot) {
+                GearSlot.WEAPON -> heroState.weaponId
+                GearSlot.ARMOR -> heroState.armorId
+                GearSlot.ACCESSORY -> heroState.accessoryId
+            }
+            if (currentGearId == gearId) return@launch
+
+            val otherHero = _heroes.value.find { hero ->
+                hero.id != heroId && when (gear.slot) {
+                    GearSlot.WEAPON -> hero.weaponId == gearId
+                    GearSlot.ARMOR -> hero.armorId == gearId
+                    GearSlot.ACCESSORY -> hero.accessoryId == gearId
+                }
+            }
+            if (otherHero != null) {
+                heroRepo.unequipGear(otherHero.id, gear.slot)
+                refreshEngineStatsForHero(otherHero.id)
+            }
+
+            heroRepo.equipGear(heroId, gear.slot, gearId)
+            refreshEngineStatsForHero(heroId)
+            sfx.play("ui_tap")
+        }
+    }
+
+    fun unequipGear(heroId: String, slot: GearSlot) {
+        viewModelScope.launch {
+            heroRepo.unequipGear(heroId, slot)
+            refreshEngineStatsForHero(heroId)
+            sfx.play("ui_tap")
+        }
+    }
+
+    fun salvageGear(gearId: Long) {
+        viewModelScope.launch {
+            val gear = allGear.find { it.id == gearId } ?: return@launch
+
+            val equippedBy = _heroes.value.find { hero ->
+                hero.weaponId == gearId || hero.armorId == gearId || hero.accessoryId == gearId
+            }
+            if (equippedBy != null) {
+                heroRepo.unequipGear(equippedBy.id, gear.slot)
+                refreshEngineStatsForHero(equippedBy.id)
+            }
+
+            gearRepo.delete(gearId)
+
+            val returns = salvageReturns(gear.rarity)
+            for ((type, amount) in returns) {
+                progressRepo.addMaterial(type, amount)
+            }
+            sfx.play("ui_tap")
+        }
+    }
+
+    private fun salvageReturns(rarity: Rarity): Map<MaterialType, Int> = when (rarity) {
+        Rarity.COMMON -> mapOf(MaterialType.ORE to 1)
+        Rarity.UNCOMMON -> mapOf(MaterialType.ORE to 2)
+        Rarity.RARE -> mapOf(MaterialType.ORE to 2, MaterialType.ESSENCE to 1)
+        Rarity.EPIC -> mapOf(MaterialType.ESSENCE to 2, MaterialType.FRAGMENT to 1)
+        Rarity.LEGENDARY -> mapOf(MaterialType.ESSENCE to 3, MaterialType.CRYSTAL to 1)
+    }
+
+    private suspend fun refreshEngineStatsForHero(heroId: String) {
+        val state = heroRepo.getById(heroId) ?: return
+        val slot = state.formationSlot ?: return
+        val def = HeroRegistry.byId(heroId) ?: return
+        val gear = gearForHero(state)
+        engine.refreshHeroStats(slot, state.effectiveStats(def, gear))
     }
 
     private suspend fun processOfflineEarnings() {

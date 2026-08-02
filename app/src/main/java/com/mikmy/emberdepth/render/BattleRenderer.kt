@@ -412,6 +412,11 @@ class BattleRenderer {
         floatingText.push(x, y - unit * 0.05f, "+${amount.format()}", colGold, 0.5f, unit * 0.025f)
     }
 
+    fun onForgeComplete(rarityLabel: String) {
+        floatingText.push(w * 0.5f, battleY + (h - battleY) * 0.5f,
+            "New $rarityLabel Gear!", colEmber, 1.2f, unit * 0.04f)
+    }
+
     private fun elementColor(element: Element): Int = element.color.toInt()
 
     private fun withAlpha(color: Int, alpha: Int): Int =

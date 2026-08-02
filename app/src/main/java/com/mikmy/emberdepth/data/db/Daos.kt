@@ -54,6 +54,15 @@ interface HeroDao {
     @Query("UPDATE hero SET slot = :slot WHERE id = :id")
     suspend fun updateSlot(id: String, slot: Int?)
 
+    @Query("UPDATE hero SET weaponId = :gearId WHERE id = :id")
+    suspend fun updateWeapon(id: String, gearId: Long?)
+
+    @Query("UPDATE hero SET armorId = :gearId WHERE id = :id")
+    suspend fun updateArmor(id: String, gearId: Long?)
+
+    @Query("UPDATE hero SET accessoryId = :gearId WHERE id = :id")
+    suspend fun updateAccessory(id: String, gearId: Long?)
+
     @Query("UPDATE hero SET level = 1 WHERE unlocked = 1")
     suspend fun resetAllLevels()
 }
@@ -68,6 +77,12 @@ interface GearDao {
 
     @Insert
     suspend fun insert(entity: GearEntity): Long
+
+    @Query("SELECT * FROM gear")
+    fun observeAll(): Flow<List<GearEntity>>
+
+    @Query("SELECT COUNT(*) FROM gear")
+    suspend fun count(): Int
 
     @Query("DELETE FROM gear WHERE id = :id")
     suspend fun delete(id: Long)

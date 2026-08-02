@@ -35,6 +35,7 @@ object Tuning {
 
     const val FORGE_ORE_COST = 5
     const val FORGE_ESSENCE_COST = 3
+    const val MAX_GEAR_INVENTORY = 50
 
     const val MATERIAL_DROP_BASE_CHANCE = 0.3
     const val BOSS_MATERIAL_GUARANTEED = true

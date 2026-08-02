@@ -9,11 +9,17 @@ import com.mikmy.emberdepth.core.model.StatBonus
 import com.mikmy.emberdepth.core.model.StatType
 import com.mikmy.emberdepth.data.db.GearDao
 import com.mikmy.emberdepth.data.db.GearEntity
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class GearRepo @Inject constructor(private val dao: GearDao) {
+
+    fun observeAll(): Flow<List<Gear>> = dao.observeAll().map { list ->
+        list.map { it.toDomain() }
+    }
 
     suspend fun getAll(): List<Gear> = dao.getAll().map { it.toDomain() }
 
@@ -24,6 +30,8 @@ class GearRepo @Inject constructor(private val dao: GearDao) {
     }
 
     suspend fun delete(id: Long) = dao.delete(id)
+
+    suspend fun count(): Int = dao.count()
 
     suspend fun deleteAll() = dao.deleteAll()
 

@@ -1,6 +1,7 @@
 package com.mikmy.emberdepth.data.repo
 
 import com.mikmy.emberdepth.core.content.HeroRegistry
+import com.mikmy.emberdepth.core.model.GearSlot
 import com.mikmy.emberdepth.core.model.HeroState
 import com.mikmy.emberdepth.data.db.HeroDao
 import com.mikmy.emberdepth.data.db.HeroEntity
@@ -41,6 +42,22 @@ class HeroRepo @Inject constructor(private val dao: HeroDao) {
                 )
             }
             dao.upsertAll(entities)
+        }
+    }
+
+    suspend fun equipGear(heroId: String, slot: GearSlot, gearId: Long) {
+        when (slot) {
+            GearSlot.WEAPON -> dao.updateWeapon(heroId, gearId)
+            GearSlot.ARMOR -> dao.updateArmor(heroId, gearId)
+            GearSlot.ACCESSORY -> dao.updateAccessory(heroId, gearId)
+        }
+    }
+
+    suspend fun unequipGear(heroId: String, slot: GearSlot) {
+        when (slot) {
+            GearSlot.WEAPON -> dao.updateWeapon(heroId, null)
+            GearSlot.ARMOR -> dao.updateArmor(heroId, null)
+            GearSlot.ACCESSORY -> dao.updateAccessory(heroId, null)
         }
     }
 
