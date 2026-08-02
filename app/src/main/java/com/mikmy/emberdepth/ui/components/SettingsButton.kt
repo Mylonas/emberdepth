@@ -31,6 +31,7 @@ fun SettingsButton(
     isMuted: Boolean,
     highestFloor: Int,
     onToggleMute: () -> Unit,
+    onRebirth: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -82,8 +83,20 @@ fun SettingsButton(
                         color = EmberColors.textSecondary,
                         fontSize = 11.sp
                     )
+                    if (onRebirth != null && highestFloor >= 50) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = "🔥 Rebirth",
+                            color = EmberColors.ember,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .clickable { onRebirth() }
+                                .padding(vertical = 4.dp)
+                        )
+                    }
                     Text(
-                        text = "EmberDepth v0.2.0",
+                        text = "EmberDepth v0.3.0",
                         color = EmberColors.textSecondary.copy(alpha = 0.5f),
                         fontSize = 10.sp
                     )

@@ -32,12 +32,14 @@ import com.mikmy.emberdepth.core.content.HeroRegistry
 import com.mikmy.emberdepth.render.BattleView
 import com.mikmy.emberdepth.ui.GameViewModel
 import com.mikmy.emberdepth.core.engine.Tuning
+import com.mikmy.emberdepth.ui.components.EmberUpgradePanel
 import com.mikmy.emberdepth.ui.components.ForgePanel
 import com.mikmy.emberdepth.ui.components.GearInventoryPanel
 import com.mikmy.emberdepth.ui.components.HeroTray
 import com.mikmy.emberdepth.ui.components.LevelUpPanel
 import com.mikmy.emberdepth.ui.components.MaterialBar
 import com.mikmy.emberdepth.ui.components.OfflinePopup
+import com.mikmy.emberdepth.ui.components.RebirthPanel
 import com.mikmy.emberdepth.ui.components.SettingsButton
 import com.mikmy.emberdepth.ui.theme.EmberColors
 import dagger.hilt.android.AndroidEntryPoint
@@ -63,8 +65,11 @@ class MainActivity : ComponentActivity() {
             val selectedHeroId by viewModel.selectedHeroId.collectAsState()
             val offlineResult by viewModel.offlineResult.collectAsState()
             val gearList by viewModel.gear.collectAsState()
+            val emberUpgrades by viewModel.emberUpgrades.collectAsState()
             val showForge by viewModel.showForge.collectAsState()
             val showInventory by viewModel.showInventory.collectAsState()
+            val showRebirthConfirm by viewModel.showRebirthConfirm.collectAsState()
+            val showEmberUpgrades by viewModel.showEmberUpgrades.collectAsState()
             val lastForged by viewModel.lastForgedGear.collectAsState()
 
             Box(modifier = Modifier.fillMaxSize()) {
@@ -96,6 +101,10 @@ class MainActivity : ComponentActivity() {
                         viewModel.toggleMute()
                         viewModel.sfx.play("ui_tap")
                     },
+                    onRebirth = {
+                        viewModel.toggleRebirthConfirm()
+                        viewModel.sfx.play("ui_tap")
+                    },
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(start = 8.dp, top = 56.dp)
@@ -110,6 +119,12 @@ class MainActivity : ComponentActivity() {
                         viewModel.toggleInventory()
                         viewModel.sfx.play("ui_tap")
                     },
+                    onEmberUpgrades = if (player.rebirthCount > 0) {
+                        {
+                            viewModel.toggleEmberUpgrades()
+                            viewModel.sfx.play("ui_tap")
+                        }
+                    } else null,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(end = 8.dp, top = 56.dp)
@@ -180,6 +195,27 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
+                if (showRebirthConfirm) {
+                    RebirthPanel(
+                        highestFloor = player.highestFloor,
+                        currentEmber = player.ember,
+                        rebirthCount = player.rebirthCount,
+                        rebirthTier = player.rebirthTier,
+                        onRebirth = { viewModel.performRebirth() },
+                        onDismiss = { viewModel.dismissRebirthConfirm() }
+                    )
+                }
+
+                if (showEmberUpgrades) {
+                    EmberUpgradePanel(
+                        ember = player.ember,
+                        rebirthTier = player.rebirthTier,
+                        upgrades = emberUpgrades,
+                        onPurchase = { viewModel.purchaseEmberUpgrade(it) },
+                        onDismiss = { viewModel.dismissEmberUpgrades() }
+                    )
+                }
+
                 val offline = offlineResult
                 if (offline != null) {
                     OfflinePopup(
@@ -241,6 +277,7 @@ class MainActivity : ComponentActivity() {
 private fun ActionButtons(
     onForge: () -> Unit,
     onInventory: () -> Unit,
+    onEmberUpgrades: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier) {
@@ -265,6 +302,20 @@ private fun ActionButtons(
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Text(text = "🎒", color = EmberColors.textSecondary, fontSize = 16.sp)
+            }
+        }
+        if (onEmberUpgrades != null) {
+            Spacer(Modifier.height(6.dp))
+            Surface(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clickable { onEmberUpgrades() },
+                shape = CircleShape,
+                color = EmberColors.surface.copy(alpha = 0.8f)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(text = "🔥", color = EmberColors.ember, fontSize = 16.sp)
+                }
             }
         }
     }

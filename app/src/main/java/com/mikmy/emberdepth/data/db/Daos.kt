@@ -65,6 +65,9 @@ interface HeroDao {
 
     @Query("UPDATE hero SET level = 1 WHERE unlocked = 1")
     suspend fun resetAllLevels()
+
+    @Query("UPDATE hero SET weaponId = NULL, armorId = NULL, accessoryId = NULL WHERE unlocked = 1")
+    suspend fun resetGearAssignments()
 }
 
 @Dao

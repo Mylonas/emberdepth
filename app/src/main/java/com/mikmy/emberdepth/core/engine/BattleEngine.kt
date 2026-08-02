@@ -62,7 +62,8 @@ class BattleEngine {
         gearLookup: (HeroState) -> List<com.mikmy.emberdepth.core.model.Gear>,
         startFloor: Int,
         goldMult: Double = 1.0,
-        damageMult: Double = 1.0
+        damageMult: Double = 1.0,
+        hpMult: Double = 1.0
     ) {
         currentFloor = startFloor
         goldMultiplier = goldMult
@@ -72,7 +73,8 @@ class BattleEngine {
             .filter { it.second.formationSlot != null }
             .map { (def, state) ->
                 val gear = gearLookup(state)
-                val stats = state.effectiveStats(def, gear)
+                val base = state.effectiveStats(def, gear)
+                val stats = if (hpMult != 1.0) base.copy(hp = base.hp * hpMult) else base
                 BattleHero(
                     def = def,
                     state = state,

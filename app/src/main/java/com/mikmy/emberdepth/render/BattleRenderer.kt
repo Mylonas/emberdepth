@@ -417,6 +417,14 @@ class BattleRenderer {
             "New $rarityLabel Gear!", colEmber, 1.2f, unit * 0.04f)
     }
 
+    fun onRebirth() {
+        screenFx.triggerFlash(0.8f)
+        screenFx.triggerShake(0.015f, unit)
+        particles.burst(w * 0.5f, h * 0.5f, colEmber, 40, unit * 0.5f)
+        floatingText.push(w * 0.5f, battleY + (h - battleY) * 0.35f,
+            "REBIRTH", colEmber, 1.5f, unit * 0.07f)
+    }
+
     private fun elementColor(element: Element): Int = element.color.toInt()
 
     private fun withAlpha(color: Int, alpha: Int): Int =

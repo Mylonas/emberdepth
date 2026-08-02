@@ -65,6 +65,28 @@ object EmberEconomy {
         return eff.coerceAtMost(0.95)
     }
 
+    fun totalHpMultiplier(upgrades: Map<String, Int>, defs: List<EmberUpgradeDef>): Double {
+        var mult = 1.0
+        for (def in defs) {
+            val level = upgrades[def.id] ?: 0
+            if (level > 0 && def.effect is UpgradeEffect.HpMultiplier) {
+                mult *= 1.0 + def.effect.perLevel * level
+            }
+        }
+        return mult
+    }
+
+    fun extraHeroSlots(upgrades: Map<String, Int>, defs: List<EmberUpgradeDef>): Int {
+        var slots = 0
+        for (def in defs) {
+            val level = upgrades[def.id] ?: 0
+            if (level > 0 && def.effect is UpgradeEffect.ExtraHeroSlot) {
+                slots += def.effect.perLevel * level
+            }
+        }
+        return slots
+    }
+
     fun startingFloor(upgrades: Map<String, Int>, defs: List<EmberUpgradeDef>): Int {
         var floor = 1
         for (def in defs) {

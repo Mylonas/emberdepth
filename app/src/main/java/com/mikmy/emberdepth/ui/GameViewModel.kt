@@ -3,7 +3,9 @@ package com.mikmy.emberdepth.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mikmy.emberdepth.audio.Sfx
+import com.mikmy.emberdepth.core.content.EmberUpgradeDefs
 import com.mikmy.emberdepth.core.content.HeroRegistry
+import com.mikmy.emberdepth.core.economy.EmberEconomy
 import com.mikmy.emberdepth.core.economy.GoldEconomy
 import com.mikmy.emberdepth.core.engine.BattleEngine
 import com.mikmy.emberdepth.core.engine.LootGenerator
@@ -51,6 +53,9 @@ class GameViewModel @Inject constructor(
     private val _materials = MutableStateFlow<Map<MaterialType, Int>>(emptyMap())
     val materials: StateFlow<Map<MaterialType, Int>> = _materials
 
+    private val _emberUpgrades = MutableStateFlow<Map<String, Int>>(emptyMap())
+    val emberUpgrades: StateFlow<Map<String, Int>> = _emberUpgrades
+
     private val _offlineResult = MutableStateFlow<OfflineResult?>(null)
     val offlineResult: StateFlow<OfflineResult?> = _offlineResult
 
@@ -69,6 +74,12 @@ class GameViewModel @Inject constructor(
     private val _showInventory = MutableStateFlow(false)
     val showInventory: StateFlow<Boolean> = _showInventory
 
+    private val _showRebirthConfirm = MutableStateFlow(false)
+    val showRebirthConfirm: StateFlow<Boolean> = _showRebirthConfirm
+
+    private val _showEmberUpgrades = MutableStateFlow(false)
+    val showEmberUpgrades: StateFlow<Boolean> = _showEmberUpgrades
+
     private var initialized = false
     private var allGear = emptyList<Gear>()
 
@@ -83,6 +94,7 @@ class GameViewModel @Inject constructor(
             _player.value = playerRepo.get()
             _heroes.value = heroRepo.getAll()
             _materials.value = progressRepo.getMaterials()
+            _emberUpgrades.value = progressRepo.getEmberUpgrades()
             allGear = gearRepo.getAll()
 
             processOfflineEarnings()
@@ -104,6 +116,9 @@ class GameViewModel @Inject constructor(
                 allGear = it
             }
         }
+        viewModelScope.launch {
+            progressRepo.observeEmberUpgrades().collect { _emberUpgrades.value = it }
+        }
     }
 
     private fun startBattle() {
@@ -115,10 +130,16 @@ class GameViewModel @Inject constructor(
 
         if (heroPairs.isEmpty()) return
 
+        val upgrades = _emberUpgrades.value
+        val defs = EmberUpgradeDefs.ALL
+
         engine.init(
             heroDefs = heroPairs,
             gearLookup = { state -> gearForHero(state) },
-            startFloor = _player.value.currentFloor
+            startFloor = _player.value.currentFloor,
+            goldMult = EmberEconomy.totalGoldMultiplier(upgrades, defs),
+            damageMult = EmberEconomy.totalDamageMultiplier(upgrades, defs),
+            hpMult = EmberEconomy.totalHpMultiplier(upgrades, defs)
         )
     }
 
@@ -238,9 +259,15 @@ class GameViewModel @Inject constructor(
             .filter { it.unlocked && it.formationSlot != null }
             .mapNotNull { it.formationSlot }
             .toSet()
-        val nextSlot = (0 until Tuning.MAX_FORMATION_SIZE).firstOrNull { it !in occupied }
+        val nextSlot = (0 until effectiveFormationSize()).firstOrNull { it !in occupied }
             ?: return
         heroRepo.setSlot(heroId, nextSlot)
+    }
+
+    private fun effectiveFormationSize(): Int {
+        return Tuning.MAX_FORMATION_SIZE + EmberEconomy.extraHeroSlots(
+            _emberUpgrades.value, EmberUpgradeDefs.ALL
+        )
     }
 
     fun selectHero(id: String?) {
@@ -275,6 +302,82 @@ class GameViewModel @Inject constructor(
 
     fun dismissInventory() {
         _showInventory.value = false
+    }
+
+    fun toggleRebirthConfirm() {
+        _showRebirthConfirm.value = !_showRebirthConfirm.value
+    }
+
+    fun dismissRebirthConfirm() {
+        _showRebirthConfirm.value = false
+    }
+
+    fun toggleEmberUpgrades() {
+        _showEmberUpgrades.value = !_showEmberUpgrades.value
+    }
+
+    fun dismissEmberUpgrades() {
+        _showEmberUpgrades.value = false
+    }
+
+    fun performRebirth() {
+        viewModelScope.launch {
+            val player = _player.value
+            if (player.highestFloor < 50) return@launch
+
+            val emberEarned = EmberEconomy.emberFromRebirth(player.highestFloor)
+            val newRebirthCount = player.rebirthCount + 1
+            val newTier = EmberEconomy.rebirthTier(newRebirthCount)
+            val upgrades = _emberUpgrades.value
+            val startFloor = EmberEconomy.startingFloor(upgrades, EmberUpgradeDefs.ALL)
+
+            val updated = player.copy(
+                gold = BigNum.ZERO,
+                ember = player.ember + emberEarned,
+                currentFloor = startFloor,
+                highestFloor = startFloor,
+                rebirthCount = newRebirthCount,
+                rebirthTier = newTier
+            )
+            _player.value = updated
+            playerRepo.save(updated)
+
+            heroRepo.resetAllLevels()
+            heroRepo.resetGearAssignments()
+            gearRepo.deleteAll()
+            progressRepo.resetMaterials()
+            progressRepo.incrementStat("rebirths")
+
+            if (!player.hasTutorialFlag(TutorialFlag.FIRST_REBIRTH)) {
+                setTutorialFlag(TutorialFlag.FIRST_REBIRTH)
+            }
+
+            _showRebirthConfirm.value = false
+            sfx.play("rebirth", 0.9f)
+            renderer.onRebirth()
+
+            _heroes.value = heroRepo.getAll()
+            allGear = emptyList()
+            startBattle()
+        }
+    }
+
+    fun purchaseEmberUpgrade(upgradeId: String) {
+        viewModelScope.launch {
+            val def = EmberUpgradeDefs.byId(upgradeId) ?: return@launch
+            val player = _player.value
+            if (player.rebirthTier < def.requiredRebirthTier) return@launch
+
+            val currentLevel = _emberUpgrades.value[upgradeId] ?: 0
+            if (!EmberEconomy.canAffordUpgrade(player.ember, def, currentLevel)) return@launch
+
+            val cost = EmberEconomy.upgradeCost(def, currentLevel)
+            val newEmber = player.ember - cost
+            _player.value = player.copy(ember = newEmber)
+            playerRepo.updateEmber(newEmber)
+            progressRepo.setUpgradeLevel(upgradeId, currentLevel + 1)
+            sfx.play("ui_tap")
+        }
     }
 
     fun forgeGear() {
@@ -393,11 +496,16 @@ class GameViewModel @Inject constructor(
         val elapsed = System.currentTimeMillis() - player.lastOnlineMs
         if (elapsed < 60_000L) return
 
+        val upgrades = _emberUpgrades.value
+        val upgradesDefs = EmberUpgradeDefs.ALL
+
         val power = partyPower()
         val result = OfflineSimulator.simulate(
             startFloor = player.currentFloor,
             partyPower = power,
-            elapsedMs = elapsed
+            elapsedMs = elapsed,
+            offlineEfficiency = EmberEconomy.offlineEfficiency(upgrades, upgradesDefs),
+            goldMultiplier = EmberEconomy.totalGoldMultiplier(upgrades, upgradesDefs)
         )
         if (result.floorsCleared <= 0 && result.goldEarned.isZero()) return
 

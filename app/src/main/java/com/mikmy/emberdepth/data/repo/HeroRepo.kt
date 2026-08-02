@@ -29,6 +29,8 @@ class HeroRepo @Inject constructor(private val dao: HeroDao) {
 
     suspend fun resetAllLevels() = dao.resetAllLevels()
 
+    suspend fun resetGearAssignments() = dao.resetGearAssignments()
+
     suspend fun ensureExists() {
         val existing = dao.getAll()
         if (existing.isEmpty()) {
