@@ -1,3 +1,4 @@
+import java.io.File
 import java.util.Properties
 
 plugins {
@@ -11,7 +12,41 @@ val keystorePropsFile = rootProject.file("keystore.properties")
 val keystoreProps = Properties().apply {
     if (keystorePropsFile.exists()) keystorePropsFile.inputStream().use { load(it) }
 }
-val hasReleaseKeystore = keystorePropsFile.exists()
+
+fun secretProp(name: String): String? =
+    (project.findProperty(name) as String?)?.takeIf { it.isNotBlank() }
+
+val storeFilePath = secretProp("KEYSTORE_FILE") ?: keystoreProps.getProperty("storeFile")
+val storePass = secretProp("KEYSTORE_PASSWORD") ?: keystoreProps.getProperty("storePassword")
+val keyAliasName = secretProp("KEY_ALIAS") ?: keystoreProps.getProperty("keyAlias")
+val keyPass = secretProp("KEY_PASSWORD") ?: keystoreProps.getProperty("keyPassword")
+
+val resolvedKeystore: File? = storeFilePath?.let {
+    val f = File(it)
+    if (f.isAbsolute) f else rootProject.file(it)
+}
+val canSignRelease = resolvedKeystore?.exists() == true &&
+    !storePass.isNullOrBlank() && !keyAliasName.isNullOrBlank() && !keyPass.isNullOrBlank()
+
+val testAdmobAppId = "ca-app-pub-3940256099942544~3347511713"
+val testRewardedId = "ca-app-pub-3940256099942544/5224354917"
+val admobAppId = (project.findProperty("ADMOB_APP_ID") as String?) ?: testAdmobAppId
+val rewardedId = (project.findProperty("ADMOB_REWARDED_ID") as String?) ?: testRewardedId
+
+if (project.hasProperty("requireRelease")) {
+    if (!canSignRelease) {
+        throw GradleException(
+            "requireRelease is set but no signing key was supplied. This build " +
+                "would be signed with the debug key and Play would reject it."
+        )
+    }
+    if (admobAppId == testAdmobAppId || rewardedId == testRewardedId) {
+        throw GradleException(
+            "requireRelease is set but the AdMob ids are still Google's test ids. " +
+                "This build would ship test ads to production and earn nothing."
+        )
+    }
+}
 
 android {
     namespace = "com.mikmy.emberdepth"
@@ -21,20 +56,23 @@ android {
         applicationId = "com.mikmy.emberdepth"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.0.0"
+        versionCode = secretProp("VERSION_CODE")?.toIntOrNull() ?: 2
+        versionName = secretProp("VERSION_NAME") ?: "1.0.0"
         resourceConfigurations += setOf("en")
 
-        manifestPlaceholders["ADMOB_APP_ID"] = "ca-app-pub-3940256099942544~3347511713"
+        manifestPlaceholders["ADMOB_APP_ID"] = admobAppId
+        buildConfigField("String", "AD_REWARDED_ID", "\"$rewardedId\"")
     }
 
     signingConfigs {
-        if (hasReleaseKeystore) {
+        if (canSignRelease) {
             create("release") {
-                storeFile = rootProject.file(keystoreProps.getProperty("storeFile"))
-                storePassword = keystoreProps.getProperty("storePassword")
-                keyAlias = keystoreProps.getProperty("keyAlias")
-                keyPassword = keystoreProps.getProperty("keyPassword")
+                storeFile = resolvedKeystore
+                storePassword = storePass
+                keyAlias = keyAliasName
+                keyPassword = keyPass
+                val n = resolvedKeystore!!.name.lowercase()
+                if (n.endsWith(".p12") || n.endsWith(".pfx")) storeType = "PKCS12"
             }
         }
     }
@@ -47,16 +85,16 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = if (hasReleaseKeystore) {
+            signingConfig = if (canSignRelease) {
                 signingConfigs.getByName("release")
             } else {
                 signingConfigs.getByName("debug")
             }
-            buildConfigField("String", "AD_REWARDED_ID", "\"ca-app-pub-XXXX/YYYY\"")
         }
         debug {
             isMinifyEnabled = false
-            buildConfigField("String", "AD_REWARDED_ID", "\"ca-app-pub-3940256099942544/5224354917\"")
+            manifestPlaceholders["ADMOB_APP_ID"] = testAdmobAppId
+            buildConfigField("String", "AD_REWARDED_ID", "\"$testRewardedId\"")
         }
     }
 
