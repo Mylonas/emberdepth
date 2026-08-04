@@ -27,7 +27,7 @@ object EmberColors {
     val textSecondary = Color(0xFF8A8278)
     val disabled = Color(0xFF4A4640)
 
-    fun element(color: Long): Color = Color(color.toULong())
+    fun element(color: Long): Color = Color(color.toInt())
 }
 
 @Composable
