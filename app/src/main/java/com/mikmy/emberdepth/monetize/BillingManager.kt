@@ -9,16 +9,13 @@ import com.android.billingclient.api.BillingClientStateListener
 import com.android.billingclient.api.BillingFlowParams
 import com.android.billingclient.api.BillingResult
 import com.android.billingclient.api.PendingPurchasesParams
-import com.android.billingclient.api.ProductDetailsResult
+import com.android.billingclient.api.ProductDetailsResponseListener
 import com.android.billingclient.api.Purchase
 import com.android.billingclient.api.PurchasesUpdatedListener
 import com.android.billingclient.api.QueryProductDetailsParams
 import com.android.billingclient.api.QueryPurchasesParams
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.launch
 
 object BillingManager {
 
@@ -26,7 +23,6 @@ object BillingManager {
     private const val PRODUCT_REMOVE_ADS = "remove_ads"
 
     private var billingClient: BillingClient? = null
-    private val scope = CoroutineScope(Dispatchers.Main)
 
     private val _isAdFree = MutableStateFlow(false)
     val isAdFree: StateFlow<Boolean> = _isAdFree
@@ -93,9 +89,8 @@ object BillingManager {
             .setProductList(listOf(product))
             .build()
 
-        scope.launch {
-            val result: ProductDetailsResult = client.queryProductDetails(params)
-            val details = result.productDetailsList?.firstOrNull()
+        client.queryProductDetailsAsync(params) { _, detailsList ->
+            val details = detailsList?.firstOrNull()
             _removeAdsPrice.value = details?.oneTimePurchaseOfferDetails?.formattedPrice
         }
     }
@@ -110,9 +105,8 @@ object BillingManager {
             .setProductList(listOf(product))
             .build()
 
-        scope.launch {
-            val result = client.queryProductDetails(params)
-            val details = result.productDetailsList?.firstOrNull() ?: return@launch
+        client.queryProductDetailsAsync(params) { _, detailsList ->
+            val details = detailsList?.firstOrNull() ?: return@queryProductDetailsAsync
             val flowParams = BillingFlowParams.newBuilder()
                 .setProductDetailsParamsList(
                     listOf(

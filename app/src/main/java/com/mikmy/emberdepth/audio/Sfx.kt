@@ -89,7 +89,7 @@ class Sfx {
             val amb = ambientData
             if (amb != null && !muted) {
                 for (k in 0 until CHUNK) {
-                    mix[k] += amb[ambientPos]
+                    mix[k] += amb[ambientPos].toFloat()
                     ambientPos++
                     if (ambientPos >= amb.size) ambientPos = 0
                 }
@@ -102,7 +102,7 @@ class Sfx {
                     var p = v.pos
                     var k = 0
                     while (k < CHUNK && p < d.size) {
-                        mix[k] += d[p] * v.gain
+                        mix[k] += d[p].toFloat() * v.gain
                         k++; p++
                     }
                     v.pos = p

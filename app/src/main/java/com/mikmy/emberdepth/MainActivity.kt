@@ -244,7 +244,9 @@ class MainActivity : ComponentActivity() {
                         lastForged = lastForged,
                         onForge = { viewModel.forgeGear() },
                         onEquipForged = lastForged?.let { forged ->
-                            { viewModel.equipGear(heroes.firstOrNull { it.unlocked && it.formationSlot != null }?.id ?: return@let null, forged.id) }
+                            val heroId = heroes.firstOrNull { it.unlocked && it.formationSlot != null }?.id
+                                ?: return@let null
+                            ({ viewModel.equipGear(heroId, forged.id) })
                         },
                         onDismiss = { viewModel.dismissForge() }
                     )
