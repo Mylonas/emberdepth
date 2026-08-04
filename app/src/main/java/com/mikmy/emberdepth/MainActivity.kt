@@ -20,8 +20,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -46,6 +51,9 @@ import com.mikmy.emberdepth.ui.components.MaterialBar
 import com.mikmy.emberdepth.ui.components.OfflinePopup
 import com.mikmy.emberdepth.ui.components.RebirthPanel
 import com.mikmy.emberdepth.ui.components.SettingsButton
+import com.mikmy.emberdepth.ui.components.SkillBar
+import com.mikmy.emberdepth.ui.components.SkillState
+import com.mikmy.emberdepth.ui.components.SpeedToggle
 import com.mikmy.emberdepth.ui.components.StatsPanel
 import com.mikmy.emberdepth.ui.components.TutorialTooltip
 import com.mikmy.emberdepth.ui.theme.EmberColors
@@ -91,6 +99,7 @@ class MainActivity : ComponentActivity() {
             val adReady by AdManager.adReady.collectAsState()
             val isAdFree by BillingManager.isAdFree.collectAsState()
             val removeAdsPrice by BillingManager.removeAdsPrice.collectAsState()
+            val battleSpeed by viewModel.battleSpeed.collectAsState()
 
             Box(modifier = Modifier.fillMaxSize()) {
                 AndroidView(
@@ -102,7 +111,16 @@ class MainActivity : ComponentActivity() {
                             goldProvider = { viewModel.player.value.gold },
                             emberProvider = { viewModel.player.value.ember },
                             onEvents = { events -> viewModel.handleBattleEvents(events) }
-                        ).also { battleView = it }
+                        ).also {
+                            battleView = it
+                            it.onEnemyTapped = { index ->
+                                viewModel.renderer.playerTarget = index
+                            }
+                        }
+                    },
+                    update = { view ->
+                        view.speedMultiplier = battleSpeed
+                        viewModel.renderer.playerTarget = viewModel.engine.playerTarget
                     },
                     modifier = Modifier.fillMaxSize()
                 )
@@ -166,7 +184,52 @@ class MainActivity : ComponentActivity() {
                         .padding(end = 8.dp, top = 56.dp)
                 )
 
+                SpeedToggle(
+                    speed = battleSpeed,
+                    onClick = {
+                        viewModel.cycleSpeed()
+                        viewModel.sfx.play("ui_tap")
+                    },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(end = 50.dp, top = 56.dp)
+                )
+
                 val activeHeroes = heroes.filter { it.unlocked && it.formationSlot != null }
+
+                var skillTick by remember { mutableLongStateOf(0L) }
+                LaunchedEffect(Unit) {
+                    while (true) {
+                        delay(200)
+                        skillTick++
+                    }
+                }
+
+                if (activeHeroes.size > 1) {
+                    @Suppress("UNUSED_EXPRESSION") skillTick
+                    val skillStates = viewModel.engine.heroes.map { hero ->
+                        SkillState(
+                            slot = hero.slot,
+                            skill = hero.skill,
+                            cooldownFrac = (hero.skillCooldown / hero.skill.cooldownSec).coerceIn(0f, 1f),
+                            ready = hero.skillReady,
+                            alive = hero.alive
+                        )
+                    }
+                    SkillBar(
+                        skills = skillStates,
+                        onSkillTap = { slot ->
+                            synchronized(battleView?.lock ?: return@SkillBar) {
+                                viewModel.engine.useSkill(slot)
+                            }
+                            viewModel.useSkill(slot)
+                        },
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 76.dp)
+                    )
+                }
+
                 if (activeHeroes.isNotEmpty()) {
                     HeroTray(
                         heroes = activeHeroes,
@@ -175,6 +238,9 @@ class MainActivity : ComponentActivity() {
                             viewModel.selectHero(heroId)
                             viewModel.sfx.play("ui_tap")
                         },
+                        onSwap = if (activeHeroes.size > 1) { a, b ->
+                            viewModel.swapFormationSlots(a, b)
+                        } else null,
                         modifier = Modifier.align(Alignment.BottomCenter)
                     )
                 }

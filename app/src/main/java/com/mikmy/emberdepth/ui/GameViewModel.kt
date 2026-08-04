@@ -106,6 +106,9 @@ class GameViewModel @Inject constructor(
     private val _bossRewardFloor = MutableStateFlow<Int?>(null)
     val bossRewardFloor: StateFlow<Int?> = _bossRewardFloor
 
+    private val _battleSpeed = MutableStateFlow(1f)
+    val battleSpeed: StateFlow<Float> = _battleSpeed
+
     private var initialized = false
     private var allGear = emptyList<Gear>()
 
@@ -225,6 +228,17 @@ class GameViewModel @Inject constructor(
                 BattleEngine.EventType.HERO_HEAL -> {
                     sfx.play("levelup", 0.2f)
                     renderer.onHeroHealed(event.targetIndex, event.damage)
+                }
+                BattleEngine.EventType.SKILL_USED -> {
+                    sfx.play("forge", 0.6f)
+                    val hero = engine.heroes.find { it.slot == event.sourceSlot }
+                    if (hero != null) {
+                        val (hx, hy) = renderer.heroScreenPos(hero.slot)
+                        renderer.floatingText.push(
+                            hx, hy - renderer.unit * 0.06f,
+                            hero.skill.name, renderer.colSkill, 0.8f, renderer.unit * 0.03f
+                        )
+                    }
                 }
             }
         }
@@ -794,6 +808,43 @@ class GameViewModel @Inject constructor(
             power = power + stats.atk * stats.hp
         }
         return power
+    }
+
+    fun cycleSpeed() {
+        _battleSpeed.value = when (_battleSpeed.value) {
+            1f -> 2f
+            2f -> 3f
+            else -> 1f
+        }
+    }
+
+    fun useSkill(slot: Int) {
+        sfx.play("ui_tap")
+    }
+
+    fun swapFormationSlots(heroIdA: String, heroIdB: String) {
+        viewModelScope.launch {
+            val stateA = heroRepo.getById(heroIdA) ?: return@launch
+            val stateB = heroRepo.getById(heroIdB) ?: return@launch
+            val slotA = stateA.formationSlot ?: return@launch
+            val slotB = stateB.formationSlot ?: return@launch
+            heroRepo.setSlot(heroIdA, slotB)
+            heroRepo.setSlot(heroIdB, slotA)
+
+            val defA = HeroRegistry.byId(heroIdA)
+            val defB = HeroRegistry.byId(heroIdB)
+            if (defA != null) {
+                val newState = stateA.copy(formationSlot = slotB)
+                engine.refreshHeroStats(slotB, newState.effectiveStats(defA, gearForHero(newState)))
+            }
+            if (defB != null) {
+                val newState = stateB.copy(formationSlot = slotA)
+                engine.refreshHeroStats(slotA, newState.effectiveStats(defB, gearForHero(newState)))
+            }
+
+            startBattle()
+            sfx.play("ui_tap")
+        }
     }
 
     fun saveOnPause() {

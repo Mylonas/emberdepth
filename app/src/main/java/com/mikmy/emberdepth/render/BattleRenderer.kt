@@ -30,6 +30,7 @@ class BattleRenderer {
     private val colDamage = 0xFFFF3B5C.toInt()
     private val colTextPrimary = 0xFFE8E2D8.toInt()
     private val colTextSecondary = 0xFF8A8278.toInt()
+    val colSkill = 0xFF4DA6FF.toInt()
 
     val particles = Particles()
     val floatingText = FloatingText()
@@ -44,7 +45,8 @@ class BattleRenderer {
 
     private var w = 1f
     private var h = 1f
-    private var unit = 1f
+    var unit = 1f
+        private set
     private var hudH = 0f
     private var battleY = 0f
     private var clock = 0f
@@ -76,6 +78,8 @@ class BattleRenderer {
         if (bossEntrance > 0f) bossEntrance -= dt
     }
 
+    var playerTarget: Int = -1
+
     fun draw(
         canvas: Canvas,
         heroes: List<BattleEngine.BattleHero>,
@@ -93,6 +97,7 @@ class BattleRenderer {
         drawBattleArea(canvas, floor)
         drawHeroes(canvas, heroes)
         drawEnemies(canvas, enemies, enemyIndex)
+        drawTargetIndicator(canvas, enemies)
         attackFx.draw(canvas)
         particles.draw(canvas)
         floatingText.draw(canvas, w)
@@ -152,6 +157,19 @@ class BattleRenderer {
                 canvas.drawRect(barX, barY, barX + barW, barY + barH, p)
                 p.color = if (hpFrac > 0.3f) colHealth else colDamage
                 canvas.drawRect(barX, barY, barX + barW * hpFrac, barY + barH, p)
+            }
+
+            if (hero.shieldTimer > 0f) {
+                p.style = Paint.Style.STROKE
+                p.strokeWidth = unit * 0.004f
+                p.color = withAlpha(0xFF4DA6FF.toInt(), (160 + 60 * sin(clock * 3f)).toInt())
+                canvas.drawCircle(x, y, r * 1.5f, p)
+                p.style = Paint.Style.FILL
+            }
+
+            if (hero.atkBoostTimer > 0f) {
+                p.color = withAlpha(colGold, (60 + 40 * sin(clock * 6f)).toInt())
+                canvas.drawCircle(x, y, r * 1.3f, p)
             }
 
             p.textSize = unit * 0.022f
@@ -422,6 +440,27 @@ class BattleRenderer {
     fun onAchievementUnlock(name: String, tier: Int) {
         floatingText.push(w * 0.5f, battleY + (h - battleY) * 0.4f,
             "🏆 $name T$tier", colGold, 1.3f, unit * 0.04f)
+    }
+
+    private fun drawTargetIndicator(canvas: Canvas, enemies: List<com.mikmy.emberdepth.core.model.Enemy>) {
+        if (playerTarget < 0 || playerTarget >= enemies.size) return
+        val enemy = enemies[playerTarget]
+        if (enemy.hp <= BigNum.ZERO) return
+        val (x, y) = enemyScreenPos(playerTarget)
+        val r = unit * (if (enemy.isBoss) 0.065f else 0.04f) * 1.6f
+        val pulse = 0.5f + 0.5f * sin(clock * 5f)
+        p.style = Paint.Style.STROKE
+        p.strokeWidth = unit * 0.004f
+        p.color = withAlpha(colGold, (120 + 80 * pulse).toInt())
+        canvas.drawCircle(x, y, r, p)
+        val arrowY = y - r - unit * 0.015f
+        path.reset()
+        path.moveTo(x, arrowY + unit * 0.012f)
+        path.lineTo(x - unit * 0.01f, arrowY)
+        path.lineTo(x + unit * 0.01f, arrowY)
+        path.close()
+        p.style = Paint.Style.FILL
+        canvas.drawPath(path, p)
     }
 
     fun onRebirth() {
