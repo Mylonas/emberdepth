@@ -20,7 +20,7 @@ class BattleView(
 ) : SurfaceView(context), SurfaceHolder.Callback {
 
     private val FRAME_NS = 16_666_667L
-    private val lock = Any()
+    val lock = Any()
 
     @Volatile private var running = false
     @Volatile private var paused = false

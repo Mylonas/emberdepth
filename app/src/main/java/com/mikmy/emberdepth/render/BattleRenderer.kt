@@ -142,7 +142,8 @@ class BattleRenderer {
             canvas.drawCircle(x - r * 0.2f, y - r * 0.25f, r * 0.18f, p)
 
             if (hero.alive) {
-                val hpFrac = (hero.currentHp.toDouble() / hero.stats.hp.toDouble()).toFloat().coerceIn(0f, 1f)
+                val hpDiv = hero.stats.hp.toDouble()
+                val hpFrac = if (hpDiv == 0.0) 1f else (hero.currentHp.toDouble() / hpDiv).toFloat().coerceIn(0f, 1f)
                 val barW = r * 2f
                 val barH = unit * 0.008f
                 val barY = y + r + unit * 0.015f
@@ -220,7 +221,8 @@ class BattleRenderer {
                 canvas.drawCircle(x, y, r * 1.15f, p)
             }
 
-            val hpFrac = (enemy.hp.toDouble() / enemy.maxHp.toDouble()).toFloat().coerceIn(0f, 1f)
+            val maxHpD = enemy.maxHp.toDouble()
+            val hpFrac = if (maxHpD == 0.0) 0f else (enemy.hp.toDouble() / maxHpD).toFloat().coerceIn(0f, 1f)
             val barW = r * 2f
             val barH = unit * 0.007f
             val barY2 = y + r + unit * 0.012f

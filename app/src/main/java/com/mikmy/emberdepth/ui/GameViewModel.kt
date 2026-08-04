@@ -187,24 +187,52 @@ class GameViewModel @Inject constructor(
     }
 
     fun handleBattleEvents(events: List<BattleEngine.BattleEvent>) {
+        for (event in events) {
+            when (event.type) {
+                BattleEngine.EventType.HERO_ATTACK -> {
+                    sfx.play("hit", 0.5f)
+                    val (tx, ty) = renderer.enemyScreenPos(event.targetIndex)
+                    renderer.onHeroAttack(event.sourceSlot, event.damage, tx, ty)
+                }
+                BattleEngine.EventType.ENEMY_ATTACK -> {
+                    sfx.play("thud", 0.4f)
+                }
+                BattleEngine.EventType.ENEMY_KILLED -> {
+                    val idx = event.targetIndex.coerceAtLeast(0)
+                    val (ex, ey) = renderer.enemyScreenPos(idx)
+                    val enemyColor = (event.element?.color ?: 0xFFAAAAAA).toInt()
+                    renderer.onEnemyKilled(ex, ey, enemyColor, event.isBoss)
+                    renderer.onGoldEarned(event.goldEarned, ex, ey)
+                    sfx.play("gold", 0.4f)
+                    sfx.play(if (event.isBoss) "boss_kill" else "kill", 0.7f)
+                }
+                BattleEngine.EventType.FLOOR_CLEARED -> {
+                    sfx.play("floor", 0.6f)
+                    renderer.onFloorCleared(event.floor)
+                    val newFloor = engine.currentFloor
+                    if (newFloor % Tuning.BOSS_INTERVAL == 0) {
+                        renderer.onBossFloor()
+                    }
+                }
+                BattleEngine.EventType.HERO_DIED -> {
+                    sfx.play("hero_died", 0.7f)
+                }
+                BattleEngine.EventType.PARTY_WIPED -> {
+                    sfx.play("wipe", 0.8f)
+                    engine.dropFloor()
+                    engine.healParty(0.5)
+                }
+                BattleEngine.EventType.HERO_HEAL -> {
+                    sfx.play("levelup", 0.2f)
+                    renderer.onHeroHealed(event.targetIndex, event.damage)
+                }
+            }
+        }
+
         viewModelScope.launch {
             for (event in events) {
                 when (event.type) {
-                    BattleEngine.EventType.HERO_ATTACK -> {
-                        sfx.play("hit", 0.5f)
-                        val (tx, ty) = renderer.enemyScreenPos(event.targetIndex)
-                        renderer.onHeroAttack(event.sourceSlot, event.damage, tx, ty)
-                    }
-                    BattleEngine.EventType.ENEMY_ATTACK -> {
-                        sfx.play("thud", 0.4f)
-                    }
                     BattleEngine.EventType.ENEMY_KILLED -> {
-                        val (ex, ey) = renderer.enemyScreenPos(event.targetIndex)
-                        val enemyColor = (event.element?.color ?: 0xFFAAAAAA).toInt()
-                        renderer.onEnemyKilled(ex, ey, enemyColor, event.isBoss)
-                        renderer.onGoldEarned(event.goldEarned, ex, ey)
-                        sfx.play("gold", 0.4f)
-
                         val newGold = _player.value.gold + event.goldEarned
                         _player.value = _player.value.copy(gold = newGold)
                         playerRepo.updateGold(newGold)
@@ -213,7 +241,6 @@ class GameViewModel @Inject constructor(
                             progressRepo.addMaterial(mat.type, mat.amount)
                         }
 
-                        sfx.play(if (event.isBoss) "boss_kill" else "kill", 0.7f)
                         progressRepo.incrementStat("enemies_killed")
                         if (event.isBoss) progressRepo.incrementStat("bosses_killed")
                         checkAchievements()
@@ -225,13 +252,7 @@ class GameViewModel @Inject constructor(
                             highestFloor = maxOf(_player.value.highestFloor, newFloor)
                         )
                         playerRepo.updateFloor(newFloor)
-                        sfx.play("floor", 0.6f)
-                        renderer.onFloorCleared(event.floor)
                         progressRepo.incrementStat("floors_cleared")
-
-                        if (newFloor % Tuning.BOSS_INTERVAL == 0) {
-                            renderer.onBossFloor()
-                        }
 
                         if (event.isBoss && !_player.value.hasTutorialFlag(TutorialFlag.FIRST_BOSS)) {
                             setTutorialFlag(TutorialFlag.FIRST_BOSS)
@@ -244,21 +265,12 @@ class GameViewModel @Inject constructor(
                         checkHeroUnlocks(newFloor)
                         checkAchievements()
                     }
-                    BattleEngine.EventType.HERO_DIED -> {
-                        sfx.play("hero_died", 0.7f)
-                    }
                     BattleEngine.EventType.PARTY_WIPED -> {
-                        sfx.play("wipe", 0.8f)
-                        engine.dropFloor()
-                        engine.healParty(0.5)
                         val newFloor = engine.currentFloor
                         _player.value = _player.value.copy(currentFloor = newFloor)
                         playerRepo.updateFloor(newFloor)
                     }
-                    BattleEngine.EventType.HERO_HEAL -> {
-                        sfx.play("levelup", 0.2f)
-                        renderer.onHeroHealed(event.targetIndex, event.damage)
-                    }
+                    else -> {}
                 }
             }
         }
