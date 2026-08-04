@@ -1,11 +1,13 @@
 package com.mikmy.emberdepth.core.engine
 
+import com.mikmy.emberdepth.core.model.ActiveSkill
 import com.mikmy.emberdepth.core.model.BigNum
 import com.mikmy.emberdepth.core.model.Element
 import com.mikmy.emberdepth.core.model.Enemy
 import com.mikmy.emberdepth.core.model.HeroDef
 import com.mikmy.emberdepth.core.model.HeroState
 import com.mikmy.emberdepth.core.model.Role
+import com.mikmy.emberdepth.core.model.Skills
 import com.mikmy.emberdepth.core.model.Stats
 import kotlin.random.Random
 
@@ -18,10 +20,15 @@ class BattleEngine {
         var currentHp: BigNum,
         var attackTimer: Float = 0f,
         var healTimer: Float = 0f,
-        val slot: Int
+        val slot: Int,
+        val skill: ActiveSkill = Skills.forRole(def.role, def.element),
+        var skillCooldown: Float = 0f,
+        var shieldTimer: Float = 0f,
+        var atkBoostTimer: Float = 0f
     ) {
         val alive get() = currentHp > BigNum.ZERO
         val element get() = def.element
+        val skillReady get() = skillCooldown <= 0f && alive
     }
 
     data class BattleEvent(
@@ -38,7 +45,7 @@ class BattleEngine {
 
     enum class EventType {
         HERO_ATTACK, ENEMY_ATTACK, ENEMY_KILLED, FLOOR_CLEARED,
-        HERO_DIED, PARTY_WIPED, HERO_HEAL
+        HERO_DIED, PARTY_WIPED, HERO_HEAL, SKILL_USED
     }
 
     private val events = mutableListOf<BattleEvent>()
@@ -52,6 +59,8 @@ class BattleEngine {
         private set
     var enemyIndex = 0
         private set
+
+    var playerTarget: Int = -1
 
     private var enemyAttackTimer = 0f
     private var goldMultiplier = 1.0
@@ -95,7 +104,15 @@ class BattleEngine {
 
     fun update(dt: Float) {
         if (heroes.none { it.alive }) return
-        val currentEnemy = enemies.getOrNull(enemyIndex) ?: return
+        val effectiveIndex = resolveTarget()
+        val currentEnemy = enemies.getOrNull(effectiveIndex) ?: return
+
+        for (hero in heroes) {
+            if (!hero.alive) continue
+            if (hero.skillCooldown > 0f) hero.skillCooldown -= dt
+            if (hero.shieldTimer > 0f) hero.shieldTimer -= dt
+            if (hero.atkBoostTimer > 0f) hero.atkBoostTimer -= dt
+        }
 
         for (hero in heroes) {
             if (!hero.alive) continue
@@ -125,11 +142,112 @@ class BattleEngine {
         }
     }
 
+    private fun resolveTarget(): Int {
+        if (playerTarget >= 0 && playerTarget < enemies.size) {
+            val target = enemies[playerTarget]
+            if (target.hp > BigNum.ZERO) return playerTarget
+        }
+        playerTarget = -1
+        return enemyIndex
+    }
+
+    fun setTarget(index: Int) {
+        if (index in enemies.indices && enemies[index].hp > BigNum.ZERO) {
+            playerTarget = index
+        }
+    }
+
+    fun useSkill(slot: Int) {
+        val hero = heroes.find { it.slot == slot } ?: return
+        if (!hero.skillReady) return
+        hero.skillCooldown = hero.skill.cooldownSec
+
+        when (hero.skill.id) {
+            "shield_wall" -> {
+                hero.shieldTimer = 4f
+                events.add(BattleEvent(type = EventType.SKILL_USED, sourceSlot = slot))
+            }
+            "flame_burst" -> {
+                for ((i, enemy) in enemies.withIndex()) {
+                    if (enemy.hp <= BigNum.ZERO) continue
+                    val damage = hero.stats.atk * 3.0 * damageMultiplier
+                    val newHp = enemy.hp - damage
+                    val updated = enemy.copy(hp = if (newHp < BigNum.ZERO) BigNum.ZERO else newHp)
+                    enemies[i] = updated
+                    events.add(BattleEvent(
+                        type = EventType.HERO_ATTACK, sourceSlot = slot,
+                        targetIndex = i, damage = damage
+                    ))
+                    if (updated.hp <= BigNum.ZERO) onEnemyKilled(updated)
+                }
+                events.add(BattleEvent(type = EventType.SKILL_USED, sourceSlot = slot))
+            }
+            "gale_strike" -> {
+                val target = enemies.getOrNull(resolveTarget()) ?: return
+                val damage = hero.stats.atk * 5.0 * damageMultiplier
+                val newHp = target.hp - damage
+                val updated = target.copy(hp = if (newHp < BigNum.ZERO) BigNum.ZERO else newHp)
+                val idx = resolveTarget()
+                enemies[idx] = updated
+                events.add(BattleEvent(
+                    type = EventType.HERO_ATTACK, sourceSlot = slot,
+                    targetIndex = idx, damage = damage
+                ))
+                if (updated.hp <= BigNum.ZERO) onEnemyKilled(updated)
+                events.add(BattleEvent(type = EventType.SKILL_USED, sourceSlot = slot))
+            }
+            "shadow_fang" -> {
+                val target = enemies.getOrNull(resolveTarget()) ?: return
+                val damage = hero.stats.atk * 4.0 * damageMultiplier
+                val newHp = target.hp - damage
+                val updated = target.copy(hp = if (newHp < BigNum.ZERO) BigNum.ZERO else newHp)
+                val idx = resolveTarget()
+                enemies[idx] = updated
+                events.add(BattleEvent(
+                    type = EventType.HERO_ATTACK, sourceSlot = slot,
+                    targetIndex = idx, damage = damage
+                ))
+                if (updated.hp <= BigNum.ZERO) onEnemyKilled(updated)
+                events.add(BattleEvent(type = EventType.SKILL_USED, sourceSlot = slot))
+            }
+            "healing_wave" -> {
+                for (ally in heroes) {
+                    if (!ally.alive) continue
+                    val heal = ally.stats.hp * 0.4
+                    ally.currentHp = (ally.currentHp + heal).let {
+                        if (it > ally.stats.hp) ally.stats.hp else it
+                    }
+                    events.add(BattleEvent(
+                        type = EventType.HERO_HEAL, sourceSlot = slot,
+                        targetIndex = ally.slot, damage = heal
+                    ))
+                }
+                events.add(BattleEvent(type = EventType.SKILL_USED, sourceSlot = slot))
+            }
+            "radiant_blessing" -> {
+                for (ally in heroes) {
+                    if (!ally.alive) continue
+                    val heal = ally.stats.hp * 0.4
+                    ally.currentHp = (ally.currentHp + heal).let {
+                        if (it > ally.stats.hp) ally.stats.hp else it
+                    }
+                    ally.atkBoostTimer = 3f
+                    events.add(BattleEvent(
+                        type = EventType.HERO_HEAL, sourceSlot = slot,
+                        targetIndex = ally.slot, damage = heal
+                    ))
+                }
+                events.add(BattleEvent(type = EventType.SKILL_USED, sourceSlot = slot))
+            }
+        }
+    }
+
     private fun attackEnemy(hero: BattleHero, enemy: Enemy) {
+        val boostMult = if (hero.atkBoostTimer > 0f) 1.5 else 1.0
         val damage = DamageCalc.calculate(
             hero.stats, hero.element,
             Stats(def = enemy.def), enemy.element,
-            damageMultiplier
+            damageMultiplier * boostMult
         )
         val newHp = enemy.hp - damage
         val updatedEnemy = enemy.copy(hp = if (newHp < BigNum.ZERO) BigNum.ZERO else newHp)
@@ -175,10 +293,11 @@ class BattleEngine {
 
     private fun enemyAttacksParty(enemy: Enemy) {
         val target = pickTarget() ?: return
-        val damage = DamageCalc.calculate(
+        var damage = DamageCalc.calculate(
             Stats(atk = enemy.atk), enemy.element,
             target.stats, target.element
         )
+        if (target.shieldTimer > 0f) damage = damage * 0.2
         target.currentHp = target.currentHp - damage
         if (target.currentHp < BigNum.ZERO) target.currentHp = BigNum.ZERO
 
@@ -210,6 +329,7 @@ class BattleEngine {
 
     private fun spawnFloor() {
         enemyIndex = 0
+        playerTarget = -1
         enemyAttackTimer = 0f
         val count = if (currentFloor % Tuning.BOSS_INTERVAL == 0) 1 else Tuning.ENEMIES_PER_FLOOR
         enemies = (0 until count).map { i ->

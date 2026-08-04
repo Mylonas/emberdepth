@@ -3,6 +3,7 @@ package com.mikmy.emberdepth.render
 import android.annotation.SuppressLint
 import android.content.Context
 import android.util.Log
+import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import com.mikmy.emberdepth.BuildConfig
@@ -21,6 +22,8 @@ class BattleView(
 
     private val FRAME_NS = 16_666_667L
     val lock = Any()
+    @Volatile var speedMultiplier = 1f
+    var onEnemyTapped: ((Int) -> Unit)? = null
 
     @Volatile private var running = false
     @Volatile private var paused = false
@@ -47,6 +50,29 @@ class BattleView(
     fun onPause() { paused = true }
     fun onResume() { paused = false }
 
+    @SuppressLint("ClickableViewAccessibility")
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (event.action == MotionEvent.ACTION_DOWN) {
+            val tx = event.x
+            val ty = event.y
+            synchronized(lock) {
+                for (i in engine.enemies.indices) {
+                    if (engine.enemies[i].hp <= com.mikmy.emberdepth.core.model.BigNum.ZERO) continue
+                    val (ex, ey) = renderer.enemyScreenPos(i)
+                    val dx = tx - ex
+                    val dy = ty - ey
+                    val hitRadius = kotlin.math.min(width, height) * 0.07f
+                    if (dx * dx + dy * dy <= hitRadius * hitRadius) {
+                        engine.setTarget(i)
+                        onEnemyTapped?.invoke(i)
+                        return true
+                    }
+                }
+            }
+        }
+        return super.onTouchEvent(event)
+    }
+
     private fun startThread() {
         if (running) return
         running = true
@@ -61,7 +87,8 @@ class BattleView(
                     continue
                 }
                 val now = System.nanoTime()
-                val dt = ((now - last) / 1_000_000_000.0).toFloat().coerceIn(0f, 0.05f)
+                val rawDt = ((now - last) / 1_000_000_000.0).toFloat().coerceIn(0f, 0.05f)
+                val dt = rawDt * speedMultiplier
                 last = now
 
                 val canvas = try {

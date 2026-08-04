@@ -2,38 +2,54 @@ package com.mikmy.emberdepth.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.mikmy.emberdepth.core.model.HeroDef
 import com.mikmy.emberdepth.core.model.HeroState
 import com.mikmy.emberdepth.ui.theme.EmberColors
+import kotlin.math.roundToInt
 
 @Composable
 fun HeroTray(
     heroes: List<HeroState>,
     heroDefs: List<HeroDef>,
     onHeroTap: (String) -> Unit,
+    onSwap: ((String, String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    var dragIndex by remember { mutableStateOf(-1) }
+    var dragOffsetX by remember { mutableFloatStateOf(0f) }
+    val itemWidth = 64f
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -41,14 +57,55 @@ fun HeroTray(
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        for (state in heroes) {
+        for ((index, state) in heroes.withIndex()) {
             val def = heroDefs.find { it.id == state.id } ?: continue
-            HeroPortrait(
-                def = def,
-                state = state,
-                onClick = { onHeroTap(state.id) },
-                modifier = Modifier.padding(horizontal = 4.dp)
-            )
+            val isDragging = dragIndex == index
+
+            Box(
+                modifier = Modifier
+                    .zIndex(if (isDragging) 1f else 0f)
+                    .offset { IntOffset(if (isDragging) dragOffsetX.roundToInt() else 0, 0) }
+                    .graphicsLayer {
+                        if (isDragging) {
+                            scaleX = 1.1f
+                            scaleY = 1.1f
+                            alpha = 0.85f
+                        }
+                    }
+                    .padding(horizontal = 4.dp)
+                    .pointerInput(heroes) {
+                        if (onSwap == null) return@pointerInput
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = {
+                                dragIndex = index
+                                dragOffsetX = 0f
+                            },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                dragOffsetX += dragAmount.x
+                            },
+                            onDragEnd = {
+                                val slots = (dragOffsetX / (itemWidth * density)).roundToInt()
+                                val targetIdx = (index + slots).coerceIn(0, heroes.lastIndex)
+                                if (targetIdx != index) {
+                                    onSwap(heroes[index].id, heroes[targetIdx].id)
+                                }
+                                dragIndex = -1
+                                dragOffsetX = 0f
+                            },
+                            onDragCancel = {
+                                dragIndex = -1
+                                dragOffsetX = 0f
+                            }
+                        )
+                    }
+            ) {
+                HeroPortrait(
+                    def = def,
+                    state = state,
+                    onClick = { onHeroTap(state.id) }
+                )
+            }
         }
     }
 }
