@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.0.3] - 2026-08-04
+
+### Added
+- Active skills: each hero has a role/element-specific ability (Shield Wall, Flame Burst, Gale Strike, Shadow Fang, Healing Wave, Radiant Blessing) with cooldown-based tap-to-cast UI
+- Tap-to-target: tap any enemy to redirect hero attacks, with a pulsing gold target indicator
+- Speed toggle: cycle battle speed between 1x, 2x, and 3x
+- Formation drag: long-press and drag heroes in the tray to swap formation slots
+
+### Fixed
+- Enemy kill tracking when using player targeting or AoE skills
+
+## [1.0.2] - 2026-08-04
+
+### Fixed
+- ConcurrentModificationException crash during battle rendering
+- NaN crash from division by zero in damage calculations
+
+## [1.0.1] - 2026-08-03
+
+### Fixed
+- Color(Int) usage for ARGB hex values instead of Color(ULong)
+- NPE from goFullscreen() called before setContent
+- Three compile errors caught by CI
+
+### Added
+- Emulator smoke test CI workflow
+- Play Store release infrastructure and publish workflow
+
 ## [1.0.0] - 2026-08-02
 
 ### Added
