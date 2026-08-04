@@ -18,6 +18,8 @@ data class BigNum(val mantissa: Double = 0.0, val exponent: Int = 0) : Comparabl
 
         fun of(value: Double): BigNum {
             if (value == 0.0) return ZERO
+            if (value.isNaN()) return ZERO
+            if (value.isInfinite()) return BigNum(if (value > 0) 9.999 else -9.999, 308)
             val e = floor(log10(abs(value))).toInt()
             return BigNum(value / 10.0.pow(e), e).normalize()
         }

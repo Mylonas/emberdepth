@@ -153,6 +153,7 @@ class BattleEngine {
 
         events.add(BattleEvent(
             type = EventType.ENEMY_KILLED,
+            targetIndex = enemyIndex,
             goldEarned = gold,
             materials = materials,
             isBoss = enemy.isBoss,
@@ -229,7 +230,10 @@ class BattleEngine {
     private fun healLowestAlly(support: BattleHero) {
         val wounded = heroes.filter { it.alive && it.currentHp < it.stats.hp }
         if (wounded.isEmpty()) return
-        val target = wounded.minByOrNull { it.currentHp.toDouble() / it.stats.hp.toDouble() }!!
+        val target = wounded.minByOrNull {
+            val d = it.stats.hp.toDouble()
+            if (d == 0.0) 0.0 else it.currentHp.toDouble() / d
+        }!!
         val healAmount = support.stats.atk * 0.5
         target.currentHp = (target.currentHp + healAmount).let {
             if (it > target.stats.hp) target.stats.hp else it
@@ -244,9 +248,10 @@ class BattleEngine {
 
     fun refreshHeroStats(slot: Int, newStats: Stats) {
         val hero = heroes.find { it.slot == slot } ?: return
-        val hpRatio = hero.currentHp.toDouble() / hero.stats.hp.toDouble()
+        val oldHp = hero.stats.hp.toDouble()
+        val hpRatio = if (oldHp == 0.0) 1.0 else (hero.currentHp.toDouble() / oldHp).coerceIn(0.0, 1.0)
         hero.stats = newStats
-        hero.currentHp = newStats.hp * hpRatio.coerceIn(0.0, 1.0)
+        hero.currentHp = newStats.hp * hpRatio
     }
 
     fun healParty(fraction: Double = 1.0) {
