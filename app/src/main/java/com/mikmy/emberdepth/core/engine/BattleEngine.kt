@@ -120,7 +120,7 @@ class BattleEngine {
             val interval = Tuning.ATTACK_INTERVAL_BASE.toFloat()
             if (hero.attackTimer >= interval) {
                 hero.attackTimer -= interval
-                attackEnemy(hero, currentEnemy)
+                attackEnemy(hero, currentEnemy, effectiveIndex)
             }
         }
 
@@ -178,36 +178,36 @@ class BattleEngine {
                         type = EventType.HERO_ATTACK, sourceSlot = slot,
                         targetIndex = i, damage = damage
                     ))
-                    if (updated.hp <= BigNum.ZERO) onEnemyKilled(updated)
+                    if (updated.hp <= BigNum.ZERO) onEnemyKilled(updated, i)
                 }
                 events.add(BattleEvent(type = EventType.SKILL_USED, sourceSlot = slot))
             }
             "gale_strike" -> {
-                val target = enemies.getOrNull(resolveTarget()) ?: return
+                val idx = resolveTarget()
+                val target = enemies.getOrNull(idx) ?: return
                 val damage = hero.stats.atk * 5.0 * damageMultiplier
                 val newHp = target.hp - damage
                 val updated = target.copy(hp = if (newHp < BigNum.ZERO) BigNum.ZERO else newHp)
-                val idx = resolveTarget()
                 enemies[idx] = updated
                 events.add(BattleEvent(
                     type = EventType.HERO_ATTACK, sourceSlot = slot,
                     targetIndex = idx, damage = damage
                 ))
-                if (updated.hp <= BigNum.ZERO) onEnemyKilled(updated)
+                if (updated.hp <= BigNum.ZERO) onEnemyKilled(updated, idx)
                 events.add(BattleEvent(type = EventType.SKILL_USED, sourceSlot = slot))
             }
             "shadow_fang" -> {
-                val target = enemies.getOrNull(resolveTarget()) ?: return
+                val idx = resolveTarget()
+                val target = enemies.getOrNull(idx) ?: return
                 val damage = hero.stats.atk * 4.0 * damageMultiplier
                 val newHp = target.hp - damage
                 val updated = target.copy(hp = if (newHp < BigNum.ZERO) BigNum.ZERO else newHp)
-                val idx = resolveTarget()
                 enemies[idx] = updated
                 events.add(BattleEvent(
                     type = EventType.HERO_ATTACK, sourceSlot = slot,
                     targetIndex = idx, damage = damage
                 ))
-                if (updated.hp <= BigNum.ZERO) onEnemyKilled(updated)
+                if (updated.hp <= BigNum.ZERO) onEnemyKilled(updated, idx)
                 events.add(BattleEvent(type = EventType.SKILL_USED, sourceSlot = slot))
             }
             "healing_wave" -> {
@@ -242,7 +242,7 @@ class BattleEngine {
         }
     }
 
-    private fun attackEnemy(hero: BattleHero, enemy: Enemy) {
+    private fun attackEnemy(hero: BattleHero, enemy: Enemy, targetIdx: Int = enemyIndex) {
         val boostMult = if (hero.atkBoostTimer > 0f) 1.5 else 1.0
         val damage = DamageCalc.calculate(
             hero.stats, hero.element,
@@ -251,27 +251,27 @@ class BattleEngine {
         )
         val newHp = enemy.hp - damage
         val updatedEnemy = enemy.copy(hp = if (newHp < BigNum.ZERO) BigNum.ZERO else newHp)
-        enemies[enemyIndex] = updatedEnemy
+        enemies[targetIdx] = updatedEnemy
 
         events.add(BattleEvent(
             type = EventType.HERO_ATTACK,
             sourceSlot = hero.slot,
-            targetIndex = enemyIndex,
+            targetIndex = targetIdx,
             damage = damage
         ))
 
         if (updatedEnemy.hp <= BigNum.ZERO) {
-            onEnemyKilled(updatedEnemy)
+            onEnemyKilled(updatedEnemy, targetIdx)
         }
     }
 
-    private fun onEnemyKilled(enemy: Enemy) {
+    private fun onEnemyKilled(enemy: Enemy, killedIndex: Int = enemyIndex) {
         val gold = LootGenerator.rollGoldReward(currentFloor, enemy.isBoss, goldMultiplier)
         val materials = LootGenerator.rollMaterials(enemy.lootTable, rng)
 
         events.add(BattleEvent(
             type = EventType.ENEMY_KILLED,
-            targetIndex = enemyIndex,
+            targetIndex = killedIndex,
             goldEarned = gold,
             materials = materials,
             isBoss = enemy.isBoss,
@@ -279,8 +279,9 @@ class BattleEngine {
             element = enemy.element
         ))
 
-        enemyIndex++
-        if (enemyIndex >= enemies.size) {
+        advanceEnemyIndex()
+
+        if (enemies.none { it.hp > BigNum.ZERO }) {
             events.add(BattleEvent(
                 type = EventType.FLOOR_CLEARED,
                 floor = currentFloor,
@@ -288,6 +289,12 @@ class BattleEngine {
             ))
             currentFloor++
             spawnFloor()
+        }
+    }
+
+    private fun advanceEnemyIndex() {
+        while (enemyIndex < enemies.size && enemies[enemyIndex].hp <= BigNum.ZERO) {
+            enemyIndex++
         }
     }
 
