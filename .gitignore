@@ -16,3 +16,5 @@ keystore.properties
 # Downloaded release artifacts — never commit these
 store/play-release-*/
 play-bundles/
+release-v*/
+store/emulator-artifacts/
