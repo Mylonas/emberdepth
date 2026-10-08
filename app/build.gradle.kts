@@ -50,12 +50,12 @@ if (project.hasProperty("requireRelease")) {
 
 android {
     namespace = "com.mikmy.emberdepth"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.mikmy.emberdepth"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = secretProp("VERSION_CODE")?.toIntOrNull() ?: 2
         versionName = secretProp("VERSION_NAME") ?: "1.0.0"
         resourceConfigurations += setOf("en")
