@@ -89,8 +89,8 @@ object BillingManager {
             .setProductList(listOf(product))
             .build()
 
-        client.queryProductDetailsAsync(params) { _, detailsList ->
-            val details = detailsList?.firstOrNull()
+        client.queryProductDetailsAsync(params) { _, result ->
+            val details = result.productDetailsList.firstOrNull()
             _removeAdsPrice.value = details?.oneTimePurchaseOfferDetails?.formattedPrice
         }
     }
@@ -105,8 +105,8 @@ object BillingManager {
             .setProductList(listOf(product))
             .build()
 
-        client.queryProductDetailsAsync(params) { _, detailsList ->
-            val details = detailsList?.firstOrNull() ?: return@queryProductDetailsAsync
+        client.queryProductDetailsAsync(params) { _, result ->
+            val details = result.productDetailsList.firstOrNull() ?: return@queryProductDetailsAsync
             val flowParams = BillingFlowParams.newBuilder()
                 .setProductDetailsParamsList(
                     listOf(
