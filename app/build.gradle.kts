@@ -4,6 +4,7 @@ import java.util.Properties
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp")
     id("com.google.dagger.hilt.android")
 }
@@ -103,10 +104,6 @@ android {
         buildConfig = true
     }
 
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.14"
-    }
-
     lint {
         abortOnError = false
         checkReleaseBuilds = true
@@ -156,7 +153,7 @@ dependencies {
     implementation("com.google.android.gms:play-services-ads:23.3.0")
 
     // Billing
-    implementation("com.android.billingclient:billing-ktx:7.0.0")
+    implementation("com.android.billingclient:billing-ktx:8.0.0")
 
     // Test
     testImplementation("junit:junit:4.13.2")
