@@ -1,0 +1,89 @@
+name: Sync store listing
+
+# One-off automation: captures the game running on an emulator, grabs a
+# handful of screenshots, and pushes the listing text (title/descriptions)
+# plus the icon, feature graphic and screenshots straight to the Play
+# Developer API. No Play Console UI, no browser — everything runs on the
+# GitHub-hosted runner.
+#
+# Needs PLAY_SERVICE_ACCOUNT_JSON (same secret publish.yml / play-status.yml
+# use), and that service account needs "Manage store presence" permission in
+# Play Console -> Users and permissions — a separate grant from the
+# "Release apps to testing tracks" permission the publish workflow needs.
+
+on:
+  workflow_dispatch:
+    inputs:
+      language:
+        description: "Play listing language"
+        default: "en-US"
+      screenshotCount:
+        description: "How many captured screenshots to upload (2-8)"
+        default: "4"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Build debug APK
+        run: gradle --no-daemon assembleDebug
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Capture screenshots on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: default
+          arch: x86_64
+          profile: pixel_6
+          ram-size: 4096M
+          disable-animations: false
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -no-boot-anim -camera-back none
+          script: bash .github/scripts/play.sh com.mikmy.emberdepth
+
+      - name: Sync listing text and images to Play
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          PACKAGE: com.mikmy.emberdepth
+          LANGUAGE: ${{ inputs.language }}
+          SCREENSHOT_COUNT: ${{ inputs.screenshotCount }}
+          TITLE: "EmberDepth"
+          SHORT_DESCRIPTION: "Idle dungeon RPG. Build your party. Forge gear. Rebirth for power."
+          FULL_DESCRIPTION: |
+            Descend into EmberDepth, an idle dungeon RPG where your party fights on even when you're not looking. Recruit heroes, each with a role, an element, and an active skill - Shield Wall, Flame Burst, Gale Strike, Shadow Fang, Healing Wave, Radiant Blessing - and send them deeper floor by floor.
+
+            While you play:
+            - Tap any enemy to redirect your party's attacks where you need them
+            - Cast active skills on cooldown for the fights that matter
+            - Drag heroes in the tray to rearrange your formation
+            - Switch battle speed between 1x, 2x and 3x to match your pace
+
+            While you're away, your party keeps earning. Come back to loot, gold, and progress waiting for you - then push further with gear you've forged and a formation you've tuned.
+
+            Every hundred floors brings a boss and a reward choice. When growth stalls, rebirth resets your floor for a permanent power boost that makes the next descent faster than the last - the core loop that keeps idle RPGs compelling long after the first session.
+
+            Free to play. Watch an optional ad for 2x offline earnings or a daily bonus - entirely your choice, never required. A one-time Remove Ads purchase unlocks an ad-free game with every bonus already included, permanently - no subscription, nothing that expires, nothing that gets revoked.
+
+            How deep can your party go?
+        run: |
+          python3 -m pip install --quiet google-auth requests
+          python3 .github/scripts/sync_store_listing.py
