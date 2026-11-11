@@ -50,7 +50,7 @@ if (project.hasProperty("requireRelease")) {
 
 android {
     namespace = "com.mikmy.emberdepth"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.mikmy.emberdepth"
