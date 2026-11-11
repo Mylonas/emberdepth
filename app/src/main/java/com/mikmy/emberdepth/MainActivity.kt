@@ -70,7 +70,7 @@ class MainActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         BillingManager.init(this)
-        AdManager.loadAd(this)
+        AdManager.start(this)
 
         viewModel.sfx.start()
         viewModel.initIfNeeded()
