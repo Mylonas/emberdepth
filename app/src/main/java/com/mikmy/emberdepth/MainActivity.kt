@@ -70,7 +70,7 @@ class MainActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         BillingManager.init(this)
-        AdManager.loadAd(this)
+        AdManager.start(this)
 
         viewModel.sfx.start()
         viewModel.initIfNeeded()
@@ -155,6 +155,9 @@ class MainActivity : ComponentActivity() {
                     },
                     isAdFree = isAdFree,
                     removeAdsPrice = removeAdsPrice,
+                    onPrivacyChoices = if (AdManager.privacyOptionsRequired(activity)) {
+                        { AdManager.showPrivacyOptions(activity) }
+                    } else null,
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(start = 8.dp, top = 56.dp)

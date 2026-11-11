@@ -38,6 +38,7 @@ fun SettingsButton(
     onRemoveAds: (() -> Unit)? = null,
     isAdFree: Boolean = false,
     removeAdsPrice: String? = null,
+    onPrivacyChoices: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -131,6 +132,17 @@ fun SettingsButton(
                             text = "✓ Ad-Free",
                             color = EmberColors.health,
                             fontSize = 11.sp
+                        )
+                    }
+                    if (onPrivacyChoices != null) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = "Privacy choices",
+                            color = EmberColors.textPrimary,
+                            fontSize = 13.sp,
+                            modifier = Modifier
+                                .clickable { onPrivacyChoices() }
+                                .padding(vertical = 4.dp)
                         )
                     }
                     if (onResetProgress != null) {
