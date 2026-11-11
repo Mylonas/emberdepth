@@ -2,6 +2,12 @@
 
 ## [1.0.5] - 2026-11-11
 
+### Added
+- "Privacy choices" in the settings panel reopens the consent form, shown only where consent applies.
+
+### Changed
+- Build tools and libraries brought up to date (Android Gradle Plugin 9.5, Kotlin 2.4, Compose 2026.09, Room 2.8, Hilt 2.60, Play Billing 9.1, Google Mobile Ads 25.5).
+
 ### Fixed
 - Ad consent: the app now asks EEA, UK and Swiss players for consent (Google's User Messaging Platform) before any ad is requested, as the privacy policy describes. The ads SDK no longer starts before that check.
 

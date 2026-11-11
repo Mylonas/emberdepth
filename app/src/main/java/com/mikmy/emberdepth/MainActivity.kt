@@ -155,6 +155,9 @@ class MainActivity : ComponentActivity() {
                     },
                     isAdFree = isAdFree,
                     removeAdsPrice = removeAdsPrice,
+                    onPrivacyChoices = if (AdManager.privacyOptionsRequired(activity)) {
+                        { AdManager.showPrivacyOptions(activity) }
+                    } else null,
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(start = 8.dp, top = 56.dp)
