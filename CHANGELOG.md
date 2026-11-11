@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.5] - 2026-11-11
+
+### Fixed
+- Ad consent: the app now asks EEA, UK and Swiss players for consent (Google's User Messaging Platform) before any ad is requested, as the privacy policy describes. The ads SDK no longer starts before that check.
+
 ## [1.0.3] - 2026-08-04
 
 ### Added
